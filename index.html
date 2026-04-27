@@ -1,0 +1,1260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wing Night Manager</title>
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d0d12;--surface:#11111a;--card:#16161f;--card2:#1c1c28;
+  --purple:#9b6dff;--lilac:#c4a8ff;--pink:#e879a0;
+  --text:#e2ddf5;--muted:#6b6785;--border:#2a2640;
+  --green:#5fdb8f;--red:#ff5572;--blue:#7eb8ff;--gold:#fbbf24;
+  --radius:8px;--radius-lg:12px;--tap:48px;
+}
+html,body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);font-size:15px;font-weight:300;-webkit-tap-highlight-color:transparent;}
+
+/* NAV */
+nav{display:flex;gap:2px;padding:10px;background:var(--surface);border-bottom:1px solid var(--border);overflow-x:auto;align-items:center;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+nav::-webkit-scrollbar{display:none}
+nav button{font-family:'Inter',sans-serif;font-size:12px;font-weight:400;min-height:36px;padding:0 13px;border-radius:20px;border:1px solid transparent;background:transparent;color:var(--muted);cursor:pointer;white-space:nowrap;transition:all .2s;flex-shrink:0;}
+nav button.active{background:#9b6dff18;color:var(--lilac);border-color:#9b6dff44}
+nav button:hover:not(.active){color:var(--text);border-color:var(--border)}
+.nav-title{font-family:'Special Elite',serif;font-size:16px;color:var(--purple);margin-right:6px;letter-spacing:1px;opacity:.9;flex-shrink:0;}
+.nav-dot{width:4px;height:4px;border-radius:50%;background:var(--pink);opacity:.6;flex-shrink:0;margin-right:4px;}
+.sync-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-left:4px;transition:background .3s;}
+.sync-dot.synced{background:var(--green);}
+.sync-dot.syncing{background:var(--gold);animation:pulse 1s infinite;}
+.sync-dot.error{background:var(--red);}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* LAYOUT */
+main{padding:12px;max-width:600px;margin:0 auto;padding-bottom:40px;}
+.section-title{font-family:'Special Elite',serif;font-size:18px;color:var(--lilac);margin-bottom:14px;letter-spacing:.5px;opacity:.85}
+
+/* CARDS */
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-bottom:10px}
+
+/* GRID */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid2-auto{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.grid4{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+
+/* METRICS */
+.metric{background:var(--card2);border:1px solid var(--border);border-radius:var(--radius);padding:11px 13px}
+.metric-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px;font-weight:400}
+.metric-val{font-size:20px;font-weight:500;color:var(--lilac)}
+
+/* FORMS */
+label{font-size:12px;color:var(--muted);display:block;margin-bottom:5px;letter-spacing:.3px}
+input,select,textarea{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;color:var(--text);font-family:'Inter',sans-serif;font-size:16px;font-weight:300;-webkit-appearance:none;appearance:none;}
+input:focus,select:focus,textarea:focus{outline:none;border-color:#9b6dff55;box-shadow:0 0 0 2px #9b6dff11}
+input[type=checkbox]{width:20px;height:20px;accent-color:var(--purple);flex-shrink:0;}
+input[type=range]{padding:4px 0;accent-color:var(--purple);background:transparent;border:none;}
+input[type=range]:focus{box-shadow:none;}
+textarea{resize:vertical;min-height:60px;font-size:15px;}
+select option{background:var(--card)}
+
+/* BUTTONS */
+.btn{min-height:var(--tap);padding:0 18px;border-radius:var(--radius);border:1px solid var(--border);font-family:'Inter',sans-serif;font-size:14px;font-weight:400;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;justify-content:center;gap:6px;}
+.btn-primary{background:#9b6dff18;color:var(--lilac);border-color:#9b6dff44}
+.btn-primary:active{background:#9b6dff30}
+.btn-danger{background:transparent;color:var(--red);border-color:#ff557244}
+.btn-danger:active{background:#ff557211}
+.btn-sm{min-height:36px;padding:0 12px;font-size:13px}
+.btn-ghost{background:transparent;color:var(--muted);border-color:var(--border)}
+.btn-ghost:active{color:var(--lilac)}
+.btn-success{background:#5fdb8f18;color:var(--green);border:1px solid #5fdb8f44}
+.btn-full{width:100%}
+
+/* TAGS */
+.tag{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:400;letter-spacing:.3px}
+.tag-purple{background:#9b6dff18;color:#c4a8ff;border:1px solid #9b6dff33}
+.tag-green{background:#5fdb8f18;color:#5fdb8f;border:1px solid #5fdb8f33}
+.tag-muted{background:var(--card2);color:var(--muted);border:1px solid var(--border)}
+.tag-red{background:#ff557218;color:#ff8fa0;border:1px solid #ff557233}
+
+/* TOGGLE */
+.toggle{position:relative;display:inline-block;width:44px;height:26px;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0}
+.toggle-slider{position:absolute;inset:0;background:#2a2640;border-radius:20px;cursor:pointer;transition:.2s;border:1px solid var(--border)}
+.toggle-slider:before{content:'';position:absolute;width:18px;height:18px;left:3px;top:3px;background:var(--muted);border-radius:50%;transition:.2s}
+.toggle input:checked+.toggle-slider{background:#9b6dff22;border-color:#9b6dff44}
+.toggle input:checked+.toggle-slider:before{transform:translateX(18px);background:var(--purple)}
+
+/* LAYOUT HELPERS */
+.row{display:flex;align-items:center;gap:10px}
+.row-sb{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.divider{border:none;border-top:1px solid var(--border);margin:12px 0}
+.stat-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #2a264044;}
+.check-row{display:flex;align-items:center;gap:10px;min-height:40px;}
+.check-row label{margin-bottom:0;font-size:14px;color:var(--text);cursor:pointer;}
+.flex1{flex:1}
+.fw5{font-weight:500}
+.text-sm{font-size:12px}
+.text-muted{color:var(--muted)}
+.text-lilac{color:var(--lilac)}
+.text-pink{color:var(--pink)}
+.text-green{color:var(--green)}
+.text-gold{color:var(--gold)}
+.mb8{margin-bottom:8px}
+.mb10{margin-bottom:10px}
+.mb14{margin-bottom:14px}
+.gap8{gap:8px}
+
+/* MEMBER CARDS */
+.member-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-bottom:10px;transition:border-color .2s}
+.member-card.attending{border-color:#9b6dff44}
+.member-avatar{width:40px;height:40px;border-radius:50%;background:var(--card2);border:1px solid #9b6dff44;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;color:var(--lilac);flex-shrink:0;font-family:'Special Elite',serif}
+
+/* BATCH */
+.batch-bar{height:3px;border-radius:2px;background:var(--card2);overflow:hidden;margin-top:6px}
+.batch-bar-fill{height:100%;border-radius:2px;background:var(--purple);transition:width .3s}
+
+/* HISTORY */
+.history-row{padding:9px 0;border-bottom:1px solid #2a264044;display:flex;justify-content:space-between;align-items:center;gap:8px}
+
+/* CHART */
+.chart-wrap{position:relative;height:200px;margin-top:8px}
+
+/* SAUCE */
+.sauce-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-bottom:10px;transition:border-color .2s;}
+.sauce-card.favorited{border-color:#fbbf2444;}
+.heat-bar{display:flex;gap:3px;margin-top:4px;}
+.heat-pip{width:18px;height:8px;border-radius:3px;background:var(--card2);}
+.heat-pip.lit{background:var(--heat-color);}
+.fav-btn{background:transparent;border:none;cursor:pointer;font-size:20px;padding:4px;line-height:1;transition:transform .15s;}
+.fav-btn:active{transform:scale(1.3);}
+.filter-bar{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none;margin-bottom:12px;-webkit-overflow-scrolling:touch;}
+.filter-bar::-webkit-scrollbar{display:none}
+.filter-chip{flex-shrink:0;padding:6px 13px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:12px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap;transition:all .15s;}
+.filter-chip.active{background:#9b6dff18;color:var(--lilac);border-color:#9b6dff44;}
+.sauce-icon{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+.scoville-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:500;border:1px solid;}
+.sort-row{display:flex;gap:8px;align-items:center;margin-bottom:12px;}
+.empty-state{text-align:center;padding:40px 20px;color:var(--muted);}
+.empty-state div:first-child{font-size:36px;margin-bottom:10px;}
+
+/* LOADING */
+.loading-screen{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:999;}
+.loading-spinner{width:36px;height:36px;border:2px solid var(--border);border-top-color:var(--purple);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{font-family:'Special Elite',serif;color:var(--muted);font-size:14px;letter-spacing:.5px;}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--card2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 18px;font-size:13px;color:var(--text);z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;}
+.toast.show{opacity:1;}
+.toast.error{border-color:#ff557244;color:var(--red);}
+</style>
+</head>
+<body>
+
+<!-- Loading screen -->
+<div class="loading-screen" id="loadingScreen">
+  <div class="loading-spinner"></div>
+  <div class="loading-text">Loading wing night...</div>
+</div>
+
+<!-- Toast notification -->
+<div class="toast" id="toast"></div>
+
+<nav id="nav" style="display:none">
+  <span class="nav-title">Wing Night</span>
+  <span class="nav-dot"></span>
+  <button class="active" onclick="showTab('dashboard')">Dashboard</button>
+  <button onclick="showTab('profiles')">Family</button>
+  <button onclick="showTab('event')">Tonight</button>
+  <button onclick="showTab('cook')">Cook</button>
+  <button onclick="showTab('sauces')">Sauces</button>
+  <button onclick="showTab('history')">History</button>
+  <button onclick="showTab('charts')">Charts</button>
+  <div class="sync-dot synced" id="syncDot" title="Sync status"></div>
+</nav>
+<main id="app"></main>
+
+<script>
+// =====================================================================
+// CONFIGURATION — paste your Supabase values here
+// =====================================================================
+    const SUPABASE_URL = 'https://jduczqwrdhcuhzdszhyk.supabase.co/rest/v1/';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkdWN6cXdyZGhjdWh6ZHN6aHlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyNDU3NDAsImV4cCI6MjA5MjgyMTc0MH0.f1g-8f5DEluvCPeMlcmQR3fpD22bQYq-x7o52aIK7pA';
+// =====================================================================
+
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// =====================================================================
+// HISTORICAL DATA — loaded once on first run if DB is empty
+// =====================================================================
+const HISTORICAL = [
+  {date:'12/10/24',people:5,wings:88,wing_cost:43.87,oil:5,sauce:2.5,milk:0,total_cost:51.37,cost_per_wing:0.58,ind_contrib:10.27,wings_per_person:17,extra_wings:3},
+  {date:'1/7/25',people:5,wings:84,wing_cost:43.13,oil:5,sauce:2.5,milk:0,total_cost:52.63,cost_per_wing:0.63,ind_contrib:10.53,wings_per_person:16,extra_wings:4},
+  {date:'1/21/25',people:5,wings:90,wing_cost:40.44,oil:5,sauce:2.5,milk:0,total_cost:47.94,cost_per_wing:0.53,ind_contrib:9.59,wings_per_person:18,extra_wings:0},
+  {date:'2/18/25',people:6,wings:102,wing_cost:55.63,oil:5,sauce:2.5,milk:0,total_cost:63.13,cost_per_wing:0.62,ind_contrib:10.52,wings_per_person:17,extra_wings:0},
+  {date:'3/4/25',people:5,wings:96,wing_cost:45.24,oil:5,sauce:2.5,milk:0,total_cost:52.74,cost_per_wing:0.55,ind_contrib:10.55,wings_per_person:19,extra_wings:1},
+  {date:'3/18/25',people:7,wings:122,wing_cost:62.54,oil:10,sauce:5,milk:2.48,total_cost:80.02,cost_per_wing:0.66,ind_contrib:11.43,wings_per_person:17,extra_wings:3},
+  {date:'4/1/25',people:7,wings:112,wing_cost:54.11,oil:10,sauce:5,milk:2.48,total_cost:71.59,cost_per_wing:0.64,ind_contrib:10.23,wings_per_person:16,extra_wings:0},
+  {date:'4/15/25',people:7,wings:112,wing_cost:54.82,oil:10,sauce:5,milk:2.48,total_cost:72.30,cost_per_wing:0.65,ind_contrib:10.33,wings_per_person:16,extra_wings:0},
+  {date:'4/29/25',people:6,wings:112,wing_cost:58.38,oil:10,sauce:5,milk:2.48,total_cost:75.86,cost_per_wing:0.68,ind_contrib:12.64,wings_per_person:18,extra_wings:4},
+  {date:'5/13/25',people:7,wings:130,wing_cost:55.62,oil:10,sauce:5,milk:2.48,total_cost:73.10,cost_per_wing:0.56,ind_contrib:10.44,wings_per_person:18,extra_wings:4},
+  {date:'5/26/25',people:8,wings:140,wing_cost:66.72,oil:10,sauce:5,milk:2.48,total_cost:84.20,cost_per_wing:0.60,ind_contrib:10.52,wings_per_person:17,extra_wings:4},
+  {date:'6/24/25',people:6,wings:104,wing_cost:59.93,oil:10,sauce:5,milk:2.48,total_cost:77.41,cost_per_wing:0.74,ind_contrib:12.90,wings_per_person:17,extra_wings:2},
+  {date:'7/22/25',people:7,wings:124,wing_cost:66.62,oil:10,sauce:5,milk:2.48,total_cost:84.10,cost_per_wing:0.68,ind_contrib:12.01,wings_per_person:17,extra_wings:5},
+  {date:'8/4/25',people:6,wings:110,wing_cost:56.25,oil:15,sauce:5,milk:2.98,total_cost:79.23,cost_per_wing:0.72,ind_contrib:13.21,wings_per_person:18,extra_wings:2},
+  {date:'8/19/25',people:6,wings:150,wing_cost:54.41,oil:15,sauce:5,milk:2.98,total_cost:77.39,cost_per_wing:0.52,ind_contrib:11.06,wings_per_person:21,extra_wings:3},
+  {date:'9/2/25',people:7,wings:141,wing_cost:52.35,oil:15,sauce:5,milk:2.98,total_cost:75.33,cost_per_wing:0.53,ind_contrib:10.76,wings_per_person:20,extra_wings:1},
+  {date:'9/30/25',people:8,wings:145,wing_cost:56.11,oil:15,sauce:5,milk:2.98,total_cost:79.09,cost_per_wing:0.55,ind_contrib:9.89,wings_per_person:18,extra_wings:1},
+  {date:'10/14/25',people:8,wings:186,wing_cost:69.85,oil:15,sauce:5,milk:2.98,total_cost:92.83,cost_per_wing:0.50,ind_contrib:11.60,wings_per_person:23,extra_wings:2},
+  {date:'10/28/25',people:8,wings:151,wing_cost:56.37,oil:15,sauce:5,milk:2.98,total_cost:79.35,cost_per_wing:0.53,ind_contrib:9.92,wings_per_person:18,extra_wings:7},
+  {date:'11/11/25',people:7,wings:121,wing_cost:49.25,oil:15,sauce:10,milk:2.98,total_cost:77.23,cost_per_wing:0.64,ind_contrib:11.03,wings_per_person:17,extra_wings:2},
+  {date:'11/25/25',people:8,wings:148,wing_cost:54.65,oil:15,sauce:10,milk:2.98,total_cost:82.63,cost_per_wing:0.56,ind_contrib:11.80,wings_per_person:18,extra_wings:1},
+  {date:'12/9/25',people:8,wings:131,wing_cost:50.66,oil:15,sauce:10,milk:2.98,total_cost:78.64,cost_per_wing:0.60,ind_contrib:9.83,wings_per_person:16,extra_wings:3},
+  {date:'1/6/26',people:7,wings:138,wing_cost:50.87,oil:15,sauce:10,milk:2.98,total_cost:78.85,cost_per_wing:0.57,ind_contrib:11.26,wings_per_person:19,extra_wings:5},
+  {date:'1/20/26',people:6,wings:102,wing_cost:37.55,oil:15,sauce:10,milk:2.98,total_cost:65.53,cost_per_wing:0.64,ind_contrib:10.92,wings_per_person:17,extra_wings:0},
+  {date:'2/16/26',people:8,wings:131,wing_cost:51.07,oil:15,sauce:10,milk:2.98,total_cost:79.05,cost_per_wing:0.60,ind_contrib:9.88,wings_per_person:16,extra_wings:3},
+  {date:'3/3/26',people:8,wings:143,wing_cost:53.15,oil:15,sauce:10,milk:2.98,total_cost:81.13,cost_per_wing:0.57,ind_contrib:10.14,wings_per_person:17,extra_wings:7},
+  {date:'3/17/26',people:8,wings:145,wing_cost:52.11,oil:15,sauce:10,milk:2.98,total_cost:80.09,cost_per_wing:0.55,ind_contrib:10.01,wings_per_person:18,extra_wings:1},
+  {date:'3/31/26',people:9,wings:173,wing_cost:67.11,oil:15,sauce:15,milk:2.98,total_cost:100.09,cost_per_wing:0.58,ind_contrib:11.12,wings_per_person:19,extra_wings:2},
+  {date:'4/14/26',people:8,wings:156,wing_cost:54.36,oil:15,sauce:15,milk:2.98,total_cost:87.34,cost_per_wing:0.56,ind_contrib:10.92,wings_per_person:19,extra_wings:4},
+];
+
+const DEFAULT_SETTINGS = {
+  costs: {numPacks:2, packPrices:[26.23,25.05], totalWings:156, oilCost:15, sauceCost:15, milkCost:2.98},
+  batches: {b1:{enabled:true,name:'Batch 1'}, b2:{enabled:true,name:'Batch 2'}, b3:{enabled:false,name:'Batch 3'}}
+};
+
+// =====================================================================
+// APP STATE
+// =====================================================================
+let state = {
+  costs: {...DEFAULT_SETTINGS.costs},
+  batches: {...DEFAULT_SETTINGS.batches},
+  members: [],
+  editingMember: null,
+  activeTab: 'dashboard',
+  history: [],
+  chartMetric: 'totalCost',
+  sauces: [],
+  editingSauce: null,
+  sauceFilter: 'all',
+  sauceSort: 'name',
+  sauceSearch: ''
+};
+
+let syncStatus = 'synced'; // 'synced' | 'syncing' | 'error'
+let chartInst = null;
+let saveSettingsTimer = null;
+
+// =====================================================================
+// TOAST
+// =====================================================================
+function toast(msg, isError = false) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show' + (isError ? ' error' : '');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.className = 'toast', 2800);
+}
+
+// =====================================================================
+// SYNC STATUS
+// =====================================================================
+function setSyncStatus(s) {
+  syncStatus = s;
+  const dot = document.getElementById('syncDot');
+  if (dot) dot.className = 'sync-dot ' + s;
+}
+
+// =====================================================================
+// SUPABASE — LOAD ALL DATA
+// =====================================================================
+async function loadAll() {
+  try {
+    // Load settings
+    const { data: settingsRows } = await db.from('settings').select('*');
+    if (settingsRows && settingsRows.length > 0) {
+      settingsRows.forEach(row => {
+        if (row.key === 'costs') state.costs = row.value;
+        if (row.key === 'batches') state.batches = row.value;
+      });
+    } else {
+      // First run — seed default settings
+      await db.from('settings').upsert([
+        { key: 'costs', value: DEFAULT_SETTINGS.costs },
+        { key: 'batches', value: DEFAULT_SETTINGS.batches }
+      ]);
+    }
+
+    // Load members
+    const { data: members } = await db.from('members').select('*').order('sort_order');
+    if (members) {
+      state.members = members.map(m => ({
+        id: m.id,
+        name: m.name,
+        noMax: m.no_max,
+        maxWings: m.max_wings,
+        batches: m.batches || ['b1','b2','b3'],
+        notes: m.notes || '',
+        attending: m.attending || false
+      }));
+    }
+
+    // Load sauces
+    const { data: sauces } = await db.from('sauces').select('*').order('name');
+    if (sauces) {
+      state.sauces = sauces.map(s => ({
+        id: s.id,
+        name: s.name,
+        flavorProfile: s.flavor_profile || '',
+        heat: s.heat || 5,
+        scoville: s.scoville || '',
+        glutenFree: s.gluten_free || false,
+        notes: s.notes || '',
+        favorite: s.favorite || false
+      }));
+    }
+
+    // Load history
+    const { data: history } = await db.from('history').select('*').order('created_at');
+    if (history && history.length > 0) {
+      state.history = history.map(h => ({
+        id: h.id,
+        date: h.date,
+        people: h.people,
+        wings: h.wings,
+        wingCost: h.wing_cost,
+        oil: h.oil,
+        sauce: h.sauce,
+        milk: h.milk,
+        totalCost: h.total_cost,
+        costPerWing: h.cost_per_wing,
+        indContrib: h.ind_contrib,
+        wingsPerPerson: h.wings_per_person,
+        extraWings: h.extra_wings
+      }));
+    } else {
+      // First run — seed historical data
+      const { data: inserted } = await db.from('history').insert(HISTORICAL).select();
+      if (inserted) {
+        state.history = inserted.map(h => ({
+          id: h.id, date: h.date, people: h.people, wings: h.wings,
+          wingCost: h.wing_cost, oil: h.oil, sauce: h.sauce, milk: h.milk,
+          totalCost: h.total_cost, costPerWing: h.cost_per_wing,
+          indContrib: h.ind_contrib, wingsPerPerson: h.wings_per_person,
+          extraWings: h.extra_wings
+        }));
+      }
+    }
+
+    setSyncStatus('synced');
+  } catch (err) {
+    console.error('Load error:', err);
+    setSyncStatus('error');
+    toast('Could not connect to database. Check your Supabase config.', true);
+  }
+}
+
+// =====================================================================
+// SUPABASE — SAVE SETTINGS (debounced so fast typing doesn't spam)
+// =====================================================================
+function saveSettings() {
+  clearTimeout(saveSettingsTimer);
+  saveSettingsTimer = setTimeout(async () => {
+    setSyncStatus('syncing');
+    try {
+      await db.from('settings').upsert([
+        { key: 'costs', value: state.costs },
+        { key: 'batches', value: state.batches }
+      ]);
+      setSyncStatus('synced');
+    } catch (err) {
+      setSyncStatus('error');
+      toast('Failed to save settings', true);
+    }
+  }, 600);
+}
+
+async function saveMemberToDB(member) {
+  setSyncStatus('syncing');
+  try {
+    await db.from('members').upsert({
+      id: member.id,
+      name: member.name,
+      no_max: member.noMax,
+      max_wings: member.maxWings,
+      batches: member.batches,
+      notes: member.notes,
+      attending: member.attending,
+      sort_order: state.members.findIndex(m => m.id === member.id)
+    });
+    setSyncStatus('synced');
+  } catch (err) {
+    setSyncStatus('error');
+    toast('Failed to save member', true);
+  }
+}
+
+async function deleteMemberFromDB(id) {
+  setSyncStatus('syncing');
+  try {
+    await db.from('members').delete().eq('id', id);
+    setSyncStatus('synced');
+  } catch (err) {
+    setSyncStatus('error');
+    toast('Failed to delete member', true);
+  }
+}
+
+async function saveSauceToDB(sauce) {
+  setSyncStatus('syncing');
+  try {
+    await db.from('sauces').upsert({
+      id: sauce.id,
+      name: sauce.name,
+      flavor_profile: sauce.flavorProfile,
+      heat: sauce.heat,
+      scoville: sauce.scoville,
+      gluten_free: sauce.glutenFree,
+      notes: sauce.notes,
+      favorite: sauce.favorite
+    });
+    setSyncStatus('synced');
+  } catch (err) {
+    setSyncStatus('error');
+    toast('Failed to save sauce', true);
+  }
+}
+
+async function deleteSauceFromDB(id) {
+  setSyncStatus('syncing');
+  try {
+    await db.from('sauces').delete().eq('id', id);
+    setSyncStatus('synced');
+  } catch (err) {
+    setSyncStatus('error');
+    toast('Failed to delete sauce', true);
+  }
+}
+
+async function saveHistoryEntry(entry) {
+  setSyncStatus('syncing');
+  try {
+    const { data } = await db.from('history').insert({
+      date: entry.date,
+      people: entry.people,
+      wings: entry.wings,
+      wing_cost: entry.wingCost,
+      oil: entry.oil,
+      sauce: entry.sauce,
+      milk: entry.milk,
+      total_cost: entry.totalCost,
+      cost_per_wing: entry.costPerWing,
+      ind_contrib: entry.indContrib,
+      wings_per_person: entry.wingsPerPerson,
+      extra_wings: entry.extraWings
+    }).select().single();
+    setSyncStatus('synced');
+    return data;
+  } catch (err) {
+    setSyncStatus('error');
+    toast('Failed to save history', true);
+    return null;
+  }
+}
+
+async function deleteHistoryFromDB(id) {
+  setSyncStatus('syncing');
+  try {
+    await db.from('history').delete().eq('id', id);
+    setSyncStatus('synced');
+  } catch (err) {
+    setSyncStatus('error');
+    toast('Failed to delete entry', true);
+  }
+}
+
+// =====================================================================
+// CALCULATIONS
+// =====================================================================
+function calc() {
+  const c = state.costs;
+  const totalWingCost = c.packPrices.reduce((a, b) => a + b, 0);
+  const totalWings = parseInt(c.totalWings) || 0;
+  const baseCostPerWing = totalWings > 0 ? totalWingCost / totalWings : 0;
+  const avgPackCost = c.numPacks > 0 ? totalWingCost / c.numPacks : 0;
+  const extraCosts = (parseFloat(c.oilCost)||0) + (parseFloat(c.sauceCost)||0) + (parseFloat(c.milkCost)||0);
+  const totalCost = totalWingCost + extraCosts;
+  const attending = state.members.filter(m => m.attending);
+  const n = attending.length;
+
+  let wingAllotments = {}, leftoverWings = totalWings;
+  if (n > 0) {
+    let uncapped = [...attending], changed = true;
+    while (changed) {
+      changed = false;
+      let fc = uncapped.length;
+      if (!fc) break;
+      let share = Math.floor(leftoverWings / fc);
+      let nc = [], nu = [];
+      for (let m of uncapped) {
+        const max = m.noMax ? Infinity : (parseInt(m.maxWings) || 0);
+        if (max <= share) { nc.push(m); wingAllotments[m.id] = max; }
+        else nu.push(m);
+      }
+      if (nc.length) {
+        uncapped = nu;
+        leftoverWings -= nc.reduce((a, m) => a + wingAllotments[m.id], 0);
+        changed = true;
+      } else {
+        for (let m of uncapped) wingAllotments[m.id] = share;
+        leftoverWings -= share * uncapped.length;
+        break;
+      }
+    }
+  }
+
+  const totalDistributed = Object.values(wingAllotments).reduce((a, b) => a + b, 0);
+  const extraWings = totalWings - totalDistributed;
+  let contributions = {};
+  const totalCostPerWing = totalDistributed > 0 ? totalCost / totalDistributed : 0;
+  for (let m of attending) contributions[m.id] = (wingAllotments[m.id] || 0) * totalCostPerWing;
+
+  const enabledBatches = Object.entries(state.batches).filter(([k, b]) => b.enabled).map(([k]) => k);
+  let batchWings = {};
+  for (let bk of enabledBatches) batchWings[bk] = 0;
+  for (let m of attending) {
+    const wings = wingAllotments[m.id] || 0;
+    if (!wings) continue;
+    const mb = (m.batches || []).filter(b => enabledBatches.includes(b));
+    if (!mb.length) continue;
+    const pb = wings / mb.length;
+    for (let b of mb) batchWings[b] = (batchWings[b] || 0) + pb;
+  }
+
+  return { totalWingCost, totalWings, baseCostPerWing, avgPackCost, extraCosts, totalCost, attending, n, wingAllotments, contributions, extraWings, totalDistributed, totalCostPerWing, batchWings, enabledBatches };
+}
+
+// =====================================================================
+// NAV
+// =====================================================================
+function showTab(tab) {
+  state.activeTab = tab;
+  document.querySelectorAll('nav button').forEach((b, i) => {
+    b.classList.toggle('active', ['dashboard','profiles','event','cook','sauces','history','charts'][i] === tab);
+  });
+  render();
+}
+
+function render() {
+  const app = document.getElementById('app');
+  const r = calc();
+  switch (state.activeTab) {
+    case 'dashboard': app.innerHTML = renderDashboard(r); break;
+    case 'profiles':  app.innerHTML = renderProfiles(r);  break;
+    case 'event':     app.innerHTML = renderEvent(r);     break;
+    case 'cook':      app.innerHTML = renderCook(r);      break;
+    case 'sauces':    app.innerHTML = renderSauces();     break;
+    case 'history':   app.innerHTML = renderHistory();    break;
+    case 'charts':    app.innerHTML = renderCharts(); setTimeout(() => drawChart(), 50); break;
+  }
+}
+
+// =====================================================================
+// HEAT HELPERS
+// =====================================================================
+function heatColor(h) {
+  if (h <= 2) return '#7eb8ff';
+  if (h <= 4) return '#5fdb8f';
+  if (h <= 6) return '#fbbf24';
+  if (h <= 8) return '#fb923c';
+  return '#ff5572';
+}
+function heatLabel(h) {
+  return h <= 2 ? 'Mild' : h <= 4 ? 'Medium' : h <= 6 ? 'Hot' : h <= 8 ? 'Very Hot' : 'Extreme';
+}
+function heatEmoji(h) {
+  return h <= 2 ? '🧊' : h <= 4 ? '🌶️' : h <= 6 ? '🌶️🌶️' : h <= 8 ? '🔥' : '💀';
+}
+function formatScoville(n) {
+  if (!n || n <= 0) return null;
+  if (n >= 1000000) return (n/1000000).toFixed(1).replace(/\.0$/,'') + 'M SHU';
+  if (n >= 1000) return (n/1000).toFixed(1).replace(/\.0$/,'') + 'K SHU';
+  return n + ' SHU';
+}
+function scovilleContext(n) {
+  if (!n || n <= 0) return '';
+  if (n < 500) return 'Bell pepper range';
+  if (n < 2500) return 'Mild pepper range';
+  if (n < 10000) return 'Jalapeño range';
+  if (n < 50000) return 'Cayenne range';
+  if (n < 100000) return 'Tabasco range';
+  if (n < 350000) return 'Habanero range';
+  if (n < 1000000) return 'Ghost pepper range';
+  if (n < 2000000) return 'Carolina Reaper range';
+  return 'Beyond the Reaper 💀';
+}
+
+// =====================================================================
+// DASHBOARD
+// =====================================================================
+function renderDashboard(r) {
+  const c = state.costs;
+  let packRows = '';
+  for (let i = 0; i < c.numPacks; i++) {
+    packRows += `<div class="row mb10">
+      <div class="flex1"><label>Pack ${i+1} Price ($)</label>
+      <input type="number" inputmode="decimal" step="0.01" value="${(c.packPrices[i]||0).toFixed(2)}"
+        onchange="updatePackPrice(${i}, this.value)"/></div>
+      ${c.numPacks > 1 ? `<button class="btn btn-danger btn-sm" style="margin-top:18px" onclick="removePack(${i})">Remove</button>` : ''}
+    </div>`;
+  }
+  return `
+  <div class="section-title">Cost Dashboard</div>
+  <div class="grid4 mb14">
+    <div class="metric"><div class="metric-label">Total Wings</div><div class="metric-val">${r.totalWings}</div></div>
+    <div class="metric"><div class="metric-label">Total Cost</div><div class="metric-val">$${r.totalCost.toFixed(2)}</div></div>
+    <div class="metric"><div class="metric-label">$/Wing</div><div class="metric-val">$${r.baseCostPerWing.toFixed(3)}</div></div>
+    <div class="metric"><div class="metric-label">Avg Pack</div><div class="metric-val">$${r.avgPackCost.toFixed(2)}</div></div>
+  </div>
+  <div class="card mb10">
+    <div class="row-sb mb12"><span class="fw5">Wing Packs</span>
+      <button class="btn btn-ghost btn-sm" onclick="addPack()">+ Add Pack</button></div>
+    ${packRows}
+    <hr class="divider">
+    <label>Total Wings</label>
+    <input type="number" inputmode="numeric" value="${c.totalWings}" onchange="updateCost('totalWings', this.value)"/>
+  </div>
+  <div class="card mb10">
+    <div class="fw5 mb10">Extra Costs</div>
+    <div class="grid2 mb10">
+      <div><label>Oil ($)</label><input type="number" inputmode="decimal" step="0.01" value="${c.oilCost}" onchange="updateCost('oilCost', this.value)"/></div>
+      <div><label>Sauce ($)</label><input type="number" inputmode="decimal" step="0.01" value="${c.sauceCost}" onchange="updateCost('sauceCost', this.value)"/></div>
+    </div>
+    <label>Milk ($)</label>
+    <input type="number" inputmode="decimal" step="0.01" value="${c.milkCost}" onchange="updateCost('milkCost', this.value)"/>
+    <hr class="divider">
+    <div class="stat-row"><span class="text-sm text-muted">Extras</span><span>$${r.extraCosts.toFixed(2)}</span></div>
+    <div class="stat-row"><span class="text-sm text-muted">Wings</span><span>$${r.totalWingCost.toFixed(2)}</span></div>
+    <div class="stat-row" style="border:none"><span class="fw5 text-lilac">Grand Total</span><span class="fw5 text-lilac" style="font-size:17px">$${r.totalCost.toFixed(2)}</span></div>
+  </div>
+  ${r.n > 0 ? `
+  <div class="card">
+    <div class="row-sb mb12">
+      <span class="fw5">${r.n} Attending Tonight</span>
+      <button class="btn btn-success btn-sm" onclick="logEvent()">Save to History</button>
+    </div>
+    <div class="grid4">
+      <div class="metric"><div class="metric-label">Wings Out</div><div class="metric-val">${r.totalDistributed}</div></div>
+      <div class="metric"><div class="metric-label">Extra</div><div class="metric-val">${r.extraWings}</div></div>
+      <div class="metric"><div class="metric-label">$/Wing All-In</div><div class="metric-val">$${r.totalCostPerWing.toFixed(3)}</div></div>
+      <div class="metric"><div class="metric-label">Avg Contrib</div><div class="metric-val">$${(r.totalCost/r.n).toFixed(2)}</div></div>
+    </div>
+  </div>` : `
+  <div class="card row-sb">
+    <span class="text-sm text-muted">Mark attendees on Tonight tab to see summary.</span>
+    <button class="btn btn-success btn-sm" onclick="logEvent()">Save to History</button>
+  </div>`}`;
+}
+
+// =====================================================================
+// PROFILES
+// =====================================================================
+function renderProfiles(r) {
+  const em = state.editingMember;
+  let formHtml = '';
+  if (em !== null) {
+    const isNew = em === 'new';
+    const m = isNew
+      ? {id:'',name:'',noMax:true,maxWings:20,batches:['b1','b2','b3'],notes:'',attending:false}
+      : state.members.find(x => x.id === em) || {};
+    formHtml = `
+    <div class="card" style="border-color:#9b6dff44;margin-bottom:14px">
+      <div class="fw5 text-lilac mb14">${isNew ? 'New Profile' : 'Edit Profile'}</div>
+      <label>Name</label>
+      <input id="pf-name" value="${m.name||''}" placeholder="Family member name" class="mb10"/>
+      <div class="check-row mb10">
+        <input type="checkbox" id="pf-nomax" ${m.noMax ? 'checked' : ''} onchange="toggleNoMax(this.checked)">
+        <label for="pf-nomax">No Maximum Wings</label>
+      </div>
+      <div id="pf-maxwrap" style="${m.noMax ? 'display:none' : ''}">
+        <label>Max Wings</label>
+        <input id="pf-maxwings" type="number" inputmode="numeric" value="${m.maxWings||20}" class="mb10"/>
+      </div>
+      <label>Available Batches</label>
+      <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:12px">
+        ${Object.entries(state.batches).map(([k,b]) =>
+          `<div class="check-row"><input type="checkbox" id="pf-batch-${k}" ${(m.batches||[]).includes(k)?'checked':''}>
+          <label for="pf-batch-${k}">${b.name}</label></div>`).join('')}
+      </div>
+      <label>Notes / Special Requests</label>
+      <textarea id="pf-notes" placeholder="e.g. extra crispy, no sauce..." class="mb10">${m.notes||''}</textarea>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary flex1" onclick="saveMember('${em}')">Save Profile</button>
+        <button class="btn btn-ghost" onclick="cancelEdit()">Cancel</button>
+        ${!isNew ? `<button class="btn btn-danger" onclick="deleteMember('${em}')">Delete</button>` : ''}
+      </div>
+    </div>`;
+  }
+  const cards = state.members.map(m => `
+    <div class="member-card ${m.attending ? 'attending' : ''}">
+      <div class="row-sb">
+        <div class="row gap8">
+          <div class="member-avatar">${m.name.substring(0,2).toUpperCase()}</div>
+          <div>
+            <div class="fw5" style="font-size:15px">${m.name}</div>
+            <div class="text-sm text-muted">${m.noMax ? 'No max' : 'Max ' + m.maxWings + ' wings'} &middot;
+              ${(m.batches||[]).filter(b => state.batches[b]).map(b => state.batches[b].name).join(', ') || 'No batches'}</div>
+            ${m.notes ? `<div class="text-sm text-muted" style="margin-top:3px;font-style:italic">${m.notes}</div>` : ''}
+          </div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="editMember('${m.id}')">Edit</button>
+      </div>
+    </div>`).join('');
+  return `
+  <div class="section-title">Family Profiles</div>
+  ${formHtml}
+  ${em === null ? `<button class="btn btn-primary btn-full mb14" onclick="newMember()">+ Add Family Member</button>` : ''}
+  ${state.members.length === 0 && em === null ? '<div class="text-sm text-muted">No profiles yet.</div>' : cards}`;
+}
+
+// =====================================================================
+// EVENT NIGHT
+// =====================================================================
+function renderEvent(r) {
+  const rows = state.members.map(m => {
+    const wings = r.wingAllotments[m.id] || 0;
+    const contrib = r.contributions[m.id] || 0;
+    return `
+    <div class="member-card ${m.attending ? 'attending' : ''}">
+      <div class="row-sb">
+        <div class="row gap8">
+          <label class="toggle">
+            <input type="checkbox" ${m.attending ? 'checked' : ''} onchange="toggleAttend('${m.id}', this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+          <div class="member-avatar">${m.name.substring(0,2).toUpperCase()}</div>
+          <div>
+            <div class="fw5" style="font-size:15px">${m.name}</div>
+            <div class="text-sm text-muted">${m.noMax ? 'No max' : 'Max ' + m.maxWings}</div>
+          </div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          ${m.attending
+            ? `<div class="text-lilac fw5" style="font-size:16px">${wings} wings</div><div class="text-sm text-pink">$${contrib.toFixed(2)}</div>`
+            : '<span class="tag tag-muted">Absent</span>'}
+        </div>
+      </div>
+      ${m.attending && m.notes ? `<div class="text-sm text-muted" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-style:italic">${m.notes}</div>` : ''}
+    </div>`;
+  }).join('');
+  return `
+  <div class="section-title">Tonight</div>
+  ${r.n > 0 ? `
+  <div class="grid4 mb14">
+    <div class="metric"><div class="metric-label">Attending</div><div class="metric-val">${r.n}</div></div>
+    <div class="metric"><div class="metric-label">Wings Out</div><div class="metric-val">${r.totalDistributed}</div></div>
+    <div class="metric"><div class="metric-label">Extra</div><div class="metric-val">${r.extraWings}</div></div>
+    <div class="metric"><div class="metric-label">Total</div><div class="metric-val text-pink">$${r.totalCost.toFixed(2)}</div></div>
+  </div>
+  <div class="card mb10">
+    <div class="fw5 mb10">Contributions</div>
+    ${r.attending.map(m => `
+    <div class="stat-row">
+      <span>${m.name}</span>
+      <div class="row gap8">
+        <span class="text-sm text-muted">${r.wingAllotments[m.id]||0} wings</span>
+        <span class="fw5 text-lilac">$${(r.contributions[m.id]||0).toFixed(2)}</span>
+      </div>
+    </div>`).join('')}
+    <div class="stat-row" style="border:none;margin-top:4px">
+      <span class="text-sm text-muted">Total Collected</span>
+      <span class="fw5 text-pink">$${Object.values(r.contributions).reduce((a,b)=>a+b,0).toFixed(2)}</span>
+    </div>
+  </div>` : '<div class="card text-sm text-muted mb10">Toggle attendees below to get started.</div>'}
+  ${state.members.length === 0 ? '<div class="text-sm text-muted">Add profiles on the Family tab first.</div>' : rows}`;
+}
+
+// =====================================================================
+// COOK SUMMARY
+// =====================================================================
+function renderCook(r) {
+  const totalBW = Object.values(r.batchWings).reduce((a, b) => a + b, 0);
+  const batchCards = Object.entries(state.batches).map(([k, b]) => {
+    const wings = Math.round(r.batchWings[k] || 0);
+    const pct = totalBW > 0 ? ((r.batchWings[k]||0) / totalBW * 100) : 0;
+    const bm = r.attending.filter(m => (m.batches||[]).includes(k));
+    return `
+    <div class="card">
+      <div class="row-sb mb8">
+        <div class="row gap8">
+          <label class="toggle">
+            <input type="checkbox" ${b.enabled ? 'checked' : ''} onchange="toggleBatch('${k}', this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="fw5" style="${!b.enabled ? 'color:var(--muted)' : ''}">${b.name}</span>
+          ${!b.enabled ? '<span class="tag tag-muted">Off</span>' : ''}
+        </div>
+        <span class="text-lilac fw5" style="font-size:18px">${b.enabled ? wings + ' wings' : '—'}</span>
+      </div>
+      ${b.enabled ? `
+      <div class="batch-bar mb8"><div class="batch-bar-fill" style="width:${pct.toFixed(1)}%"></div></div>
+      <div class="text-sm text-muted">${bm.length
+        ? bm.map(m => `${m.name} (${Math.round((r.wingAllotments[m.id]||0) / ((m.batches||[]).filter(bk => r.enabledBatches.includes(bk)).length || 1))})`).join(', ')
+        : 'No attendees in this batch'}</div>` : ''}
+    </div>`;
+  }).join('');
+  return `
+  <div class="section-title">Cook Summary</div>
+  <div class="grid2-auto mb14">
+    <div class="metric"><div class="metric-label">Active Batches</div><div class="metric-val">${r.enabledBatches.length}</div></div>
+    <div class="metric"><div class="metric-label">Total to Cook</div><div class="metric-val">${Math.round(totalBW)}</div></div>
+  </div>
+  ${batchCards}
+  ${r.n > 0 ? `
+  <div class="card">
+    <div class="fw5 mb10">Per-Person Breakdown</div>
+    ${r.attending.map(m => {
+      const mb = (m.batches||[]).filter(bk => r.enabledBatches.includes(bk));
+      const tw = r.wingAllotments[m.id] || 0;
+      const pb = mb.length ? Math.round(tw / mb.length) : 0;
+      return `
+      <div style="padding:8px 0;border-bottom:1px solid #2a264044">
+        <div class="row-sb mb8"><span class="fw5">${m.name}</span><span class="text-sm text-muted">${tw} total</span></div>
+        <div class="row gap8">${mb.length
+          ? mb.map(bk => `<span class="tag tag-purple">${state.batches[bk].name}: ${pb}</span>`).join('')
+          : '<span class="tag tag-red">No batches assigned</span>'}</div>
+      </div>`;
+    }).join('')}
+  </div>` : '<div class="card text-sm text-muted">Mark attendees on Tonight tab first.</div>'}`;
+}
+
+// =====================================================================
+// SAUCE VAULT
+// =====================================================================
+function renderSauces() {
+  const es = state.editingSauce;
+  let formHtml = '';
+  if (es !== null) {
+    const isNew = es === 'new';
+    const s = isNew
+      ? {id:'',name:'',flavorProfile:'',heat:5,scoville:'',glutenFree:false,notes:'',favorite:false}
+      : state.sauces.find(x => x.id === es) || {};
+    const heat = s.heat || 5;
+    formHtml = `
+    <div class="card" style="border-color:#9b6dff44;margin-bottom:14px">
+      <div class="fw5 text-lilac mb14">${isNew ? 'New Sauce' : 'Edit Sauce'}</div>
+      <label>Sauce Name</label>
+      <input id="sc-name" value="${s.name||''}" placeholder="e.g. Frank's RedHot" class="mb10"/>
+      <label>Flavor Profile</label>
+      <input id="sc-flavor" value="${s.flavorProfile||''}" placeholder="e.g. Tangy, buttery, vinegar-forward with a smoky finish" class="mb10"/>
+      <label style="margin-bottom:8px">Heat Level:
+        <span id="heat-disp" style="color:${heatColor(heat)};font-weight:500">${heat}/10 — ${heatLabel(heat)} ${heatEmoji(heat)}</span>
+      </label>
+      <input type="range" min="1" max="10" value="${heat}" id="sc-heat"
+        oninput="updateHeatDisplay(this.value)" style="width:100%" class="mb10"/>
+      <label>Scoville Units (SHU) <span class="text-muted text-sm">— optional</span></label>
+      <input id="sc-scoville" type="number" inputmode="numeric" value="${s.scoville||''}"
+        placeholder="e.g. 450000" class="mb10" oninput="updateScovilleCtx()"/>
+      <div id="sc-scoville-ctx" class="text-sm text-muted mb10" style="${s.scoville?'':'display:none'}">${scovilleContext(parseInt(s.scoville)||0)}</div>
+      <div class="check-row mb10">
+        <input type="checkbox" id="sc-gf" ${s.glutenFree ? 'checked' : ''}>
+        <label for="sc-gf">Gluten Free</label>
+      </div>
+      <div class="check-row mb10">
+        <input type="checkbox" id="sc-fav" ${s.favorite ? 'checked' : ''}>
+        <label for="sc-fav">⭐ Favorite</label>
+      </div>
+      <label>Notes</label>
+      <textarea id="sc-notes" placeholder="Tasting notes, where to buy, who loves it..." class="mb10">${s.notes||''}</textarea>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary flex1" onclick="saveSauce('${es}')">Save Sauce</button>
+        <button class="btn btn-ghost" onclick="cancelSauceEdit()">Cancel</button>
+        ${!isNew ? `<button class="btn btn-danger" onclick="deleteSauce('${es}')">Delete</button>` : ''}
+      </div>
+    </div>`;
+  }
+
+  let sauces = [...state.sauces];
+  const search = (state.sauceSearch || '').toLowerCase();
+  if (search) sauces = sauces.filter(s =>
+    s.name.toLowerCase().includes(search) ||
+    (s.flavorProfile||'').toLowerCase().includes(search) ||
+    (s.notes||'').toLowerCase().includes(search));
+  if (state.sauceFilter === 'favorites') sauces = sauces.filter(s => s.favorite);
+  else if (state.sauceFilter === 'glutenFree') sauces = sauces.filter(s => s.glutenFree);
+  else if (state.sauceFilter === 'mild') sauces = sauces.filter(s => s.heat <= 4);
+  else if (state.sauceFilter === 'medium') sauces = sauces.filter(s => s.heat > 4 && s.heat < 7);
+  else if (state.sauceFilter === 'hot') sauces = sauces.filter(s => s.heat >= 7);
+  if (state.sauceSort === 'heat_asc') sauces.sort((a, b) => a.heat - b.heat);
+  else if (state.sauceSort === 'heat_desc') sauces.sort((a, b) => b.heat - a.heat);
+  else if (state.sauceSort === 'scoville_desc') sauces.sort((a, b) => (parseInt(b.scoville)||0) - (parseInt(a.scoville)||0));
+  else if (state.sauceSort === 'name') sauces.sort((a, b) => a.name.localeCompare(b.name));
+  else if (state.sauceSort === 'favorites') sauces.sort((a, b) => (b.favorite?1:0) - (a.favorite?1:0));
+
+  const cards = sauces.map(s => {
+    const hc = heatColor(s.heat);
+    const pips = Array.from({length:10}, (_, i) =>
+      `<div class="heat-pip ${i < s.heat ? 'lit' : ''}" style="--heat-color:${hc}"></div>`).join('');
+    const shu = parseInt(s.scoville) || 0;
+    const shuFmt = formatScoville(shu);
+    const shuCtx = scovilleContext(shu);
+    return `
+    <div class="sauce-card ${s.favorite ? 'favorited' : ''}">
+      <div class="row-sb mb8">
+        <div class="row gap8" style="flex:1;min-width:0">
+          <div class="sauce-icon" style="background:${hc}18;border:1px solid ${hc}44;font-size:20px">🫙</div>
+          <div style="flex:1;min-width:0">
+            <div class="fw5" style="font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.name}</div>
+            <div style="font-size:11px;color:${hc};font-weight:500">${heatLabel(s.heat)} ${heatEmoji(s.heat)}</div>
+          </div>
+        </div>
+        <div class="row" style="gap:4px;flex-shrink:0">
+          <button class="fav-btn" onclick="toggleFavSauce('${s.id}')">${s.favorite ? '⭐' : '☆'}</button>
+          <button class="btn btn-ghost btn-sm" onclick="editSauce('${s.id}')">Edit</button>
+        </div>
+      </div>
+      <div class="heat-bar mb8">${pips}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:${s.flavorProfile||s.notes||shuFmt?'8px':'0'}">
+        ${s.glutenFree ? '<span class="tag tag-green">GF</span>' : ''}
+        ${shuFmt ? `<span class="scoville-badge" style="color:${hc};border-color:${hc}44;background:${hc}12">🌡️ ${shuFmt}</span>` : ''}
+      </div>
+      ${s.flavorProfile ? `<div class="text-sm" style="color:var(--lilac);font-style:italic;margin-bottom:${s.notes||shuCtx?'6px':'0'}">${s.flavorProfile}</div>` : ''}
+      ${shuCtx && shu > 0 ? `<div class="text-sm text-muted" style="margin-bottom:${s.notes?'6px':'0'}">${shuCtx}</div>` : ''}
+      ${s.notes ? `<div class="text-sm text-muted" style="font-style:italic">${s.notes}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  const total = state.sauces.length;
+  const favCount = state.sauces.filter(s => s.favorite).length;
+  const gfCount = state.sauces.filter(s => s.glutenFree).length;
+  const avgHeat = total ? (state.sauces.reduce((a, s) => a + s.heat, 0) / total).toFixed(1) : '—';
+
+  return `
+  <div class="section-title">Sauce Vault</div>
+  ${es === null ? `<button class="btn btn-primary btn-full mb10" onclick="newSauce()">+ Add Sauce</button>` : ''}
+  ${formHtml}
+  ${total > 0 && es === null ? `
+  <div class="grid2-auto mb10">
+    <div class="metric"><div class="metric-label">Total Sauces</div><div class="metric-val">${total}</div></div>
+    <div class="metric"><div class="metric-label">Favorites</div><div class="metric-val text-gold">${favCount}</div></div>
+    <div class="metric"><div class="metric-label">Gluten Free</div><div class="metric-val text-green">${gfCount}</div></div>
+    <div class="metric"><div class="metric-label">Avg Heat</div><div class="metric-val">${avgHeat}</div></div>
+  </div>
+  <input type="search" placeholder="Search sauces..." value="${state.sauceSearch||''}"
+    oninput="state.sauceSearch=this.value;render()" class="mb10"/>
+  <div class="filter-bar">
+    ${[['all','All'],['favorites','⭐ Favorites'],['glutenFree','GF Only'],['mild','Mild'],['medium','Medium'],['hot','Hot']].map(([k,l]) =>
+      `<button class="filter-chip ${state.sauceFilter===k?'active':''}" onclick="setSauceFilter('${k}')">${l}</button>`).join('')}
+  </div>
+  <div class="sort-row">
+    <span class="text-sm text-muted" style="flex-shrink:0">Sort:</span>
+    <select onchange="state.sauceSort=this.value;render()" style="flex:1;font-size:13px;padding:7px 10px">
+      <option value="name" ${state.sauceSort==='name'?'selected':''}>Name A–Z</option>
+      <option value="heat_asc" ${state.sauceSort==='heat_asc'?'selected':''}>Heat: Low → High</option>
+      <option value="heat_desc" ${state.sauceSort==='heat_desc'?'selected':''}>Heat: High → Low</option>
+      <option value="scoville_desc" ${state.sauceSort==='scoville_desc'?'selected':''}>Scoville: High → Low</option>
+      <option value="favorites" ${state.sauceSort==='favorites'?'selected':''}>Favorites First</option>
+    </select>
+  </div>
+  ${sauces.length === 0
+    ? `<div class="empty-state"><div>🌶️</div><div style="font-size:14px">No sauces match this filter.</div></div>`
+    : cards}
+  ` : es === null ? `<div class="empty-state"><div>🫙</div><div style="font-size:15px;margin-bottom:6px">No sauces yet.</div>
+    <div class="text-sm text-muted">Start building your sauce vault above.</div></div>` : ''}`;
+}
+
+// =====================================================================
+// HISTORY
+// =====================================================================
+function renderHistory() {
+  const h = [...state.history].reverse();
+  return `
+  <div class="section-title">History</div>
+  <div class="card">
+    ${h.length === 0 ? '<div class="text-sm text-muted">No history yet. Save an event from the Dashboard.</div>' :
+    h.map(e => `
+    <div class="history-row">
+      <div>
+        <div class="fw5" style="font-size:13px">${e.date}</div>
+        <div class="text-sm text-muted">${e.people} people &middot; ${e.wings} wings</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div class="text-lilac fw5">$${e.totalCost.toFixed(2)}</div>
+        <div class="text-sm text-muted">$${e.costPerWing.toFixed(3)}/wing</div>
+      </div>
+      <button class="btn btn-danger btn-sm" style="flex-shrink:0" onclick="deleteHistoryEntry('${e.id}')">✕</button>
+    </div>`).join('')}
+  </div>
+  <div class="text-sm text-muted" style="margin-top:6px">${state.history.length} nights recorded</div>`;
+}
+
+// =====================================================================
+// CHARTS
+// =====================================================================
+const CHART_METRICS = [
+  {key:'totalCost',    label:'Total Cost ($)',               color:'#9b6dff'},
+  {key:'costPerWing',  label:'Cost Per Wing ($)',             color:'#e879a0'},
+  {key:'indContrib',   label:'Individual Contribution ($)',   color:'#c4a8ff'},
+  {key:'wings',        label:'Total Wings',                   color:'#7eb8ff'},
+  {key:'people',       label:'Attendees',                     color:'#5fdb8f'},
+  {key:'wingsPerPerson',label:'Wings Per Person',             color:'#ff9de2'},
+  {key:'extraWings',   label:'Extra Wings',                   color:'#ff5572'},
+];
+
+function renderCharts() {
+  const h = state.history;
+  const avg = k => h.reduce((a, e) => a + (e[k]||0), 0) / h.length;
+  const max = k => Math.max(...h.map(e => e[k]||0));
+  const min = k => Math.min(...h.map(e => e[k]||0));
+  return `
+  <div class="section-title">Charts</div>
+  <div class="card mb10">
+    <select onchange="state.chartMetric=this.value;drawChart()" class="mb10">
+      ${CHART_METRICS.map(m => `<option value="${m.key}" ${state.chartMetric===m.key?'selected':''}>${m.label}</option>`).join('')}
+    </select>
+    <div class="chart-wrap"><canvas id="mainChart"></canvas></div>
+  </div>
+  <div class="card mb10">
+    <div class="fw5 mb10">All-Time Stats</div>
+    ${[['Events', h.length],['Avg Total Cost','$'+avg('totalCost').toFixed(2)],
+      ['Avg $/Wing','$'+avg('costPerWing').toFixed(3)],['Avg Attendance',avg('people').toFixed(1)],
+      ['Most Wings Ever',max('wings')],['Cheapest $/Wing','$'+min('costPerWing').toFixed(3)]]
+      .map(([l,v]) => `<div class="stat-row"><span class="text-sm text-muted">${l}</span><span class="fw5 text-lilac">${v}</span></div>`).join('')}
+  </div>
+  <div class="card">
+    <div class="fw5 mb10">Last 5 Nights</div>
+    ${h.slice(-5).map(e => `
+    <div class="stat-row">
+      <span class="text-sm text-muted">${e.date}</span>
+      <div class="row gap8"><span class="text-sm">${e.wings} wings</span><span class="fw5 text-lilac">$${e.totalCost.toFixed(2)}</span></div>
+    </div>`).join('')}
+  </div>`;
+}
+
+function drawChart() {
+  if (chartInst) { chartInst.destroy(); chartInst = null; }
+  const canvas = document.getElementById('mainChart');
+  if (!canvas) return;
+  const metric = CHART_METRICS.find(m => m.key === state.chartMetric) || CHART_METRICS[0];
+  const h = state.history;
+  chartInst = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: h.map(e => e.date),
+      datasets: [{
+        label: metric.label, data: h.map(e => e[metric.key]||0),
+        borderColor: metric.color, backgroundColor: metric.color + '18',
+        pointBackgroundColor: metric.color, pointRadius: 3, tension: 0.35, fill: true
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: {display:false}, tooltip: { callbacks: {
+        label: c => { const v = c.parsed.y; return ['totalCost','costPerWing','indContrib'].includes(metric.key) ? '$'+v.toFixed(2) : ''+v; }
+      }}},
+      scales: {
+        x: { ticks: {color:'#6b6785', maxRotation:45, font:{size:9}}, grid: {color:'#2a264044'} },
+        y: { ticks: {color:'#6b6785', font:{size:10}}, grid: {color:'#2a264044'} }
+      }
+    }
+  });
+}
+
+// =====================================================================
+// ACTIONS — COSTS
+// =====================================================================
+function updateCost(k, v) {
+  state.costs[k] = parseFloat(v) || 0;
+  render();
+  saveSettings();
+}
+function updatePackPrice(i, v) {
+  state.costs.packPrices[i] = parseFloat(v) || 0;
+  render();
+  saveSettings();
+}
+function addPack() {
+  state.costs.numPacks++;
+  state.costs.packPrices.push(0);
+  render();
+  saveSettings();
+}
+function removePack(i) {
+  state.costs.numPacks--;
+  state.costs.packPrices.splice(i, 1);
+  render();
+  saveSettings();
+}
+
+// =====================================================================
+// ACTIONS — MEMBERS
+// =====================================================================
+function newMember()        { state.editingMember = 'new'; render(); }
+function editMember(id)     { state.editingMember = id; render(); }
+function cancelEdit()       { state.editingMember = null; render(); }
+function toggleNoMax(c)     { const w = document.getElementById('pf-maxwrap'); if (w) w.style.display = c ? 'none' : ''; }
+
+async function saveMember(id) {
+  const name = document.getElementById('pf-name').value.trim();
+  if (!name) return toast('Please enter a name.', true);
+  const noMax = document.getElementById('pf-nomax').checked;
+  const maxWings = parseInt(document.getElementById('pf-maxwings')?.value) || 20;
+  const batches = ['b1','b2','b3'].filter(k => document.getElementById('pf-batch-' + k)?.checked);
+  const notes = document.getElementById('pf-notes').value.trim();
+  let member;
+  if (id === 'new') {
+    member = { id: 'm' + Date.now(), name, noMax, maxWings, batches, notes, attending: false };
+    state.members.push(member);
+  } else {
+    const idx = state.members.findIndex(m => m.id === id);
+    if (idx >= 0) { state.members[idx] = {...state.members[idx], name, noMax, maxWings, batches, notes}; member = state.members[idx]; }
+  }
+  state.editingMember = null;
+  render();
+  await saveMemberToDB(member);
+  toast('Profile saved.');
+}
+
+async function deleteMember(id) {
+  if (!confirm('Delete this profile?')) return;
+  state.members = state.members.filter(m => m.id !== id);
+  state.editingMember = null;
+  render();
+  await deleteMemberFromDB(id);
+  toast('Profile deleted.');
+}
+
+async function toggleAttend(id, val) {
+  const m = state.members.find(x => x.id === id);
+  if (!m) return;
+  m.attending = val;
+  render();
+  await saveMemberToDB(m);
+}
+
+async function toggleBatch(k, val) {
+  state.batches[k].enabled = val;
+  render();
+  saveSettings();
+}
+
+// =====================================================================
+// ACTIONS — SAUCES
+// =====================================================================
+function newSauce()          { state.editingSauce = 'new'; render(); }
+function editSauce(id)       { state.editingSauce = id; render(); }
+function cancelSauceEdit()   { state.editingSauce = null; render(); }
+function setSauceFilter(f)   { state.sauceFilter = f; render(); }
+
+function updateHeatDisplay(val) {
+  const disp = document.getElementById('heat-disp');
+  if (disp) { const h = parseInt(val); disp.style.color = heatColor(h); disp.textContent = `${h}/10 — ${heatLabel(h)} ${heatEmoji(h)}`; }
+}
+function updateScovilleCtx() {
+  const inp = document.getElementById('sc-scoville');
+  const ctx = document.getElementById('sc-scoville-ctx');
+  if (!inp || !ctx) return;
+  const val = parseInt(inp.value) || 0;
+  if (val > 0) { ctx.style.display = ''; ctx.textContent = scovilleContext(val); }
+  else ctx.style.display = 'none';
+}
+
+async function saveSauce(id) {
+  const name = document.getElementById('sc-name').value.trim();
+  if (!name) return toast('Please enter a sauce name.', true);
+  const heat = parseInt(document.getElementById('sc-heat').value) || 5;
+  const flavorProfile = document.getElementById('sc-flavor').value.trim();
+  const scoville = document.getElementById('sc-scoville').value.trim();
+  const glutenFree = document.getElementById('sc-gf').checked;
+  const favorite = document.getElementById('sc-fav').checked;
+  const notes = document.getElementById('sc-notes').value.trim();
+  let sauce;
+  if (id === 'new') {
+    sauce = { id: 's' + Date.now(), name, flavorProfile, heat, scoville, glutenFree, notes, favorite };
+    state.sauces.push(sauce);
+  } else {
+    const idx = state.sauces.findIndex(s => s.id === id);
+    if (idx >= 0) { state.sauces[idx] = {...state.sauces[idx], name, flavorProfile, heat, scoville, glutenFree, notes, favorite}; sauce = state.sauces[idx]; }
+  }
+  state.editingSauce = null;
+  render();
+  await saveSauceToDB(sauce);
+  toast('Sauce saved.');
+}
+
+async function deleteSauce(id) {
+  if (!confirm('Delete this sauce?')) return;
+  state.sauces = state.sauces.filter(s => s.id !== id);
+  state.editingSauce = null;
+  render();
+  await deleteSauceFromDB(id);
+  toast('Sauce deleted.');
+}
+
+async function toggleFavSauce(id) {
+  const s = state.sauces.find(x => x.id === id);
+  if (!s) return;
+  s.favorite = !s.favorite;
+  render();
+  await saveSauceToDB(s);
+}
+
+// =====================================================================
+// ACTIONS — HISTORY
+// =====================================================================
+async function logEvent() {
+  const r = calc();
+  const today = new Date();
+  const dateStr = `${today.getMonth()+1}/${today.getDate()}/${String(today.getFullYear()).slice(2)}`;
+  const entry = {
+    date: dateStr,
+    people: r.n || state.members.length,
+    wings: r.totalWings,
+    wingCost: r.totalWingCost,
+    oil: parseFloat(state.costs.oilCost) || 0,
+    sauce: parseFloat(state.costs.sauceCost) || 0,
+    milk: parseFloat(state.costs.milkCost) || 0,
+    totalCost: r.totalCost,
+    costPerWing: r.baseCostPerWing,
+    indContrib: r.n > 0 ? r.totalCost / r.n : 0,
+    wingsPerPerson: r.n > 0 ? Math.floor(r.totalDistributed / r.n) : 0,
+    extraWings: r.extraWings
+  };
+  const saved = await saveHistoryEntry(entry);
+  if (saved) {
+    state.history.push({
+      id: saved.id, date: saved.date, people: saved.people, wings: saved.wings,
+      wingCost: saved.wing_cost, oil: saved.oil, sauce: saved.sauce, milk: saved.milk,
+      totalCost: saved.total_cost, costPerWing: saved.cost_per_wing,
+      indContrib: saved.ind_contrib, wingsPerPerson: saved.wings_per_person,
+      extraWings: saved.extra_wings
+    });
+    render();
+    toast('Event saved to history!');
+  }
+}
+
+async function deleteHistoryEntry(id) {
+  if (!confirm('Delete this entry?')) return;
+  state.history = state.history.filter(h => h.id !== id);
+  render();
+  await deleteHistoryFromDB(id);
+  toast('Entry deleted.');
+}
+
+// =====================================================================
+// INIT
+// =====================================================================
+async function init() {
+  await loadAll();
+  document.getElementById('loadingScreen').style.display = 'none';
+  document.getElementById('nav').style.display = 'flex';
+  render();
+}
+
+init();
+</script>
+</body>
+</html>
