@@ -4,37 +4,42 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Wing Night Manager</title>
-<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#0d0d12;--surface:#11111a;--card:#16161f;--card2:#1c1c28;
-  --purple:#9b6dff;--lilac:#c4a8ff;--pink:#e879a0;
-  --text:#e2ddf5;--muted:#6b6785;--border:#2a2640;
-  --green:#5fdb8f;--red:#ff5572;--blue:#7eb8ff;--gold:#fbbf24;
+  --bg:#111111;--surface:#1a1a1a;--card:#1f1f1f;--card2:#252525;
+  --accent:#ffffff;--accent-dim:#cccccc;
+  --text:#f0f0f0;--muted:#888888;--border:#2e2e2e;
+  --green:#4caf82;--red:#e05555;--gold:#d4a017;
   --radius:8px;--radius-lg:12px;--tap:48px;
 }
 html,body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);font-size:15px;font-weight:300;-webkit-tap-highlight-color:transparent;}
 
+/* DB ERROR BANNER */
+.db-banner{display:none;background:#2a1a1a;border-bottom:1px solid #5a2a2a;padding:10px 14px;font-size:13px;color:#e07070;line-height:1.5;}
+.db-banner strong{display:block;font-weight:600;margin-bottom:2px;}
+.db-banner code{font-family:monospace;background:#3a2020;padding:1px 5px;border-radius:3px;font-size:12px;}
+.db-banner.show{display:block;}
+
 /* NAV */
-nav{display:flex;gap:2px;padding:10px;background:var(--surface);border-bottom:1px solid var(--border);overflow-x:auto;align-items:center;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+nav{display:flex;gap:2px;padding:8px 10px;background:var(--surface);border-bottom:1px solid var(--border);overflow-x:auto;align-items:center;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
 nav::-webkit-scrollbar{display:none}
-nav button{font-family:'Inter',sans-serif;font-size:12px;font-weight:400;min-height:36px;padding:0 13px;border-radius:20px;border:1px solid transparent;background:transparent;color:var(--muted);cursor:pointer;white-space:nowrap;transition:all .2s;flex-shrink:0;}
-nav button.active{background:#9b6dff18;color:var(--lilac);border-color:#9b6dff44}
-nav button:hover:not(.active){color:var(--text);border-color:var(--border)}
-.nav-title{font-family:'Special Elite',serif;font-size:16px;color:var(--purple);margin-right:6px;letter-spacing:1px;opacity:.9;flex-shrink:0;}
-.nav-dot{width:4px;height:4px;border-radius:50%;background:var(--pink);opacity:.6;flex-shrink:0;margin-right:4px;}
-.sync-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-left:4px;transition:background .3s;}
+nav button{font-family:'Inter',sans-serif;font-size:12px;font-weight:400;min-height:34px;padding:0 12px;border-radius:6px;border:1px solid transparent;background:transparent;color:var(--muted);cursor:pointer;white-space:nowrap;transition:all .15s;flex-shrink:0;}
+nav button.active{background:#ffffff12;color:var(--text);border-color:#ffffff22}
+nav button:hover:not(.active){color:var(--text)}
+.nav-title{font-family:'Inter',sans-serif;font-size:14px;font-weight:600;color:var(--text);margin-right:8px;letter-spacing:.5px;flex-shrink:0;opacity:.9;}
+.sync-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;margin-left:6px;transition:background .3s;}
 .sync-dot.synced{background:var(--green);}
 .sync-dot.syncing{background:var(--gold);animation:pulse 1s infinite;}
 .sync-dot.error{background:var(--red);}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 
 /* LAYOUT */
-main{padding:12px;max-width:600px;margin:0 auto;padding-bottom:40px;}
-.section-title{font-family:'Special Elite',serif;font-size:18px;color:var(--lilac);margin-bottom:14px;letter-spacing:.5px;opacity:.85}
+main{padding:14px;max-width:600px;margin:0 auto;padding-bottom:44px;}
+.section-title{font-size:16px;font-weight:600;color:var(--text);margin-bottom:14px;letter-spacing:.2px;}
 
 /* CARDS */
 .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-bottom:10px}
@@ -46,115 +51,125 @@ main{padding:12px;max-width:600px;margin:0 auto;padding-bottom:40px;}
 
 /* METRICS */
 .metric{background:var(--card2);border:1px solid var(--border);border-radius:var(--radius);padding:11px 13px}
-.metric-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px;font-weight:400}
-.metric-val{font-size:20px;font-weight:500;color:var(--lilac)}
+.metric-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:4px;font-weight:400}
+.metric-val{font-size:20px;font-weight:500;color:var(--text)}
 
 /* FORMS */
-label{font-size:12px;color:var(--muted);display:block;margin-bottom:5px;letter-spacing:.3px}
+label{font-size:12px;color:var(--muted);display:block;margin-bottom:5px;letter-spacing:.2px}
 input,select,textarea{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;color:var(--text);font-family:'Inter',sans-serif;font-size:16px;font-weight:300;-webkit-appearance:none;appearance:none;}
-input:focus,select:focus,textarea:focus{outline:none;border-color:#9b6dff55;box-shadow:0 0 0 2px #9b6dff11}
-input[type=checkbox]{width:20px;height:20px;accent-color:var(--purple);flex-shrink:0;}
-input[type=range]{padding:4px 0;accent-color:var(--purple);background:transparent;border:none;}
+input:focus,select:focus,textarea:focus{outline:none;border-color:#ffffff33;box-shadow:0 0 0 2px #ffffff09}
+input[type=checkbox]{width:20px;height:20px;accent-color:var(--text);flex-shrink:0;}
+input[type=range]{padding:4px 0;accent-color:var(--text);background:transparent;border:none;}
 input[type=range]:focus{box-shadow:none;}
 textarea{resize:vertical;min-height:60px;font-size:15px;}
 select option{background:var(--card)}
 
 /* BUTTONS */
 .btn{min-height:var(--tap);padding:0 18px;border-radius:var(--radius);border:1px solid var(--border);font-family:'Inter',sans-serif;font-size:14px;font-weight:400;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;justify-content:center;gap:6px;}
-.btn-primary{background:#9b6dff18;color:var(--lilac);border-color:#9b6dff44}
-.btn-primary:active{background:#9b6dff30}
-.btn-danger{background:transparent;color:var(--red);border-color:#ff557244}
-.btn-danger:active{background:#ff557211}
+.btn-primary{background:#ffffff14;color:var(--text);border-color:#ffffff28}
+.btn-primary:active{background:#ffffff22}
+.btn-danger{background:transparent;color:var(--red);border-color:#e0555533}
+.btn-danger:active{background:#e0555511}
 .btn-sm{min-height:36px;padding:0 12px;font-size:13px}
 .btn-ghost{background:transparent;color:var(--muted);border-color:var(--border)}
-.btn-ghost:active{color:var(--lilac)}
-.btn-success{background:#5fdb8f18;color:var(--green);border:1px solid #5fdb8f44}
+.btn-ghost:active{color:var(--text)}
+.btn-success{background:#4caf8218;color:var(--green);border:1px solid #4caf8240}
 .btn-full{width:100%}
 
 /* TAGS */
-.tag{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:400;letter-spacing:.3px}
-.tag-purple{background:#9b6dff18;color:#c4a8ff;border:1px solid #9b6dff33}
-.tag-green{background:#5fdb8f18;color:#5fdb8f;border:1px solid #5fdb8f33}
+.tag{display:inline-block;padding:3px 9px;border-radius:6px;font-size:11px;font-weight:400;letter-spacing:.2px}
+.tag-primary{background:#ffffff14;color:var(--accent-dim);border:1px solid #ffffff22}
+.tag-green{background:#4caf8218;color:#4caf82;border:1px solid #4caf8233}
 .tag-muted{background:var(--card2);color:var(--muted);border:1px solid var(--border)}
-.tag-red{background:#ff557218;color:#ff8fa0;border:1px solid #ff557233}
+.tag-red{background:#e0555518;color:#e08080;border:1px solid #e0555533}
 
 /* TOGGLE */
 .toggle{position:relative;display:inline-block;width:44px;height:26px;flex-shrink:0}
 .toggle input{opacity:0;width:0;height:0}
-.toggle-slider{position:absolute;inset:0;background:#2a2640;border-radius:20px;cursor:pointer;transition:.2s;border:1px solid var(--border)}
+.toggle-slider{position:absolute;inset:0;background:#2a2a2a;border-radius:20px;cursor:pointer;transition:.2s;border:1px solid var(--border)}
 .toggle-slider:before{content:'';position:absolute;width:18px;height:18px;left:3px;top:3px;background:var(--muted);border-radius:50%;transition:.2s}
-.toggle input:checked+.toggle-slider{background:#9b6dff22;border-color:#9b6dff44}
-.toggle input:checked+.toggle-slider:before{transform:translateX(18px);background:var(--purple)}
+.toggle input:checked+.toggle-slider{background:#ffffff18;border-color:#ffffff30}
+.toggle input:checked+.toggle-slider:before{transform:translateX(18px);background:var(--text)}
 
 /* LAYOUT HELPERS */
 .row{display:flex;align-items:center;gap:10px}
 .row-sb{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .divider{border:none;border-top:1px solid var(--border);margin:12px 0}
-.stat-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #2a264044;}
+.stat-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #2e2e2e55;}
 .check-row{display:flex;align-items:center;gap:10px;min-height:40px;}
 .check-row label{margin-bottom:0;font-size:14px;color:var(--text);cursor:pointer;}
 .flex1{flex:1}
 .fw5{font-weight:500}
+.fw6{font-weight:600}
 .text-sm{font-size:12px}
 .text-muted{color:var(--muted)}
-.text-lilac{color:var(--lilac)}
-.text-pink{color:var(--pink)}
+.text-white{color:var(--text)}
 .text-green{color:var(--green)}
 .text-gold{color:var(--gold)}
+.text-red{color:var(--red)}
 .mb8{margin-bottom:8px}
 .mb10{margin-bottom:10px}
+.mb12{margin-bottom:12px}
 .mb14{margin-bottom:14px}
 .gap8{gap:8px}
 
 /* MEMBER CARDS */
 .member-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-bottom:10px;transition:border-color .2s}
-.member-card.attending{border-color:#9b6dff44}
-.member-avatar{width:40px;height:40px;border-radius:50%;background:var(--card2);border:1px solid #9b6dff44;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;color:var(--lilac);flex-shrink:0;font-family:'Special Elite',serif}
+.member-card.attending{border-color:#ffffff28}
+.member-avatar{width:38px;height:38px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:var(--text);flex-shrink:0;}
 
 /* BATCH */
-.batch-bar{height:3px;border-radius:2px;background:var(--card2);overflow:hidden;margin-top:6px}
-.batch-bar-fill{height:100%;border-radius:2px;background:var(--purple);transition:width .3s}
+.batch-bar{height:2px;border-radius:2px;background:var(--card2);overflow:hidden;margin-top:6px}
+.batch-bar-fill{height:100%;border-radius:2px;background:#888;transition:width .3s}
 
 /* HISTORY */
-.history-row{padding:9px 0;border-bottom:1px solid #2a264044;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.history-row{padding:9px 0;border-bottom:1px solid #2e2e2e55;display:flex;justify-content:space-between;align-items:center;gap:8px}
 
 /* CHART */
 .chart-wrap{position:relative;height:200px;margin-top:8px}
 
 /* SAUCE */
 .sauce-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-bottom:10px;transition:border-color .2s;}
-.sauce-card.favorited{border-color:#fbbf2444;}
+.sauce-card.favorited{border-color:#d4a01740;}
 .heat-bar{display:flex;gap:3px;margin-top:4px;}
-.heat-pip{width:18px;height:8px;border-radius:3px;background:var(--card2);}
+.heat-pip{width:18px;height:6px;border-radius:2px;background:var(--card2);}
 .heat-pip.lit{background:var(--heat-color);}
 .fav-btn{background:transparent;border:none;cursor:pointer;font-size:20px;padding:4px;line-height:1;transition:transform .15s;}
 .fav-btn:active{transform:scale(1.3);}
 .filter-bar{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none;margin-bottom:12px;-webkit-overflow-scrolling:touch;}
 .filter-bar::-webkit-scrollbar{display:none}
-.filter-chip{flex-shrink:0;padding:6px 13px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:12px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap;transition:all .15s;}
-.filter-chip.active{background:#9b6dff18;color:var(--lilac);border-color:#9b6dff44;}
-.sauce-icon{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
-.scoville-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:500;border:1px solid;}
+.filter-chip{flex-shrink:0;padding:6px 13px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:12px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap;transition:all .15s;}
+.filter-chip.active{background:#ffffff12;color:var(--text);border-color:#ffffff28;}
+.sauce-icon{width:38px;height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;background:var(--card2);border:1px solid var(--border);}
+.scoville-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:500;border:1px solid;}
 .sort-row{display:flex;gap:8px;align-items:center;margin-bottom:12px;}
 .empty-state{text-align:center;padding:40px 20px;color:var(--muted);}
 .empty-state div:first-child{font-size:36px;margin-bottom:10px;}
 
 /* LOADING */
 .loading-screen{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:999;}
-.loading-spinner{width:36px;height:36px;border:2px solid var(--border);border-top-color:var(--purple);border-radius:50%;animation:spin .8s linear infinite;}
+.loading-spinner{width:32px;height:32px;border:2px solid var(--border);border-top-color:#888;border-radius:50%;animation:spin .8s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg)}}
-.loading-text{font-family:'Special Elite',serif;color:var(--muted);font-size:14px;letter-spacing:.5px;}
+.loading-text{color:var(--muted);font-size:13px;}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--card2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 18px;font-size:13px;color:var(--text);z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;}
 .toast.show{opacity:1;}
-.toast.error{border-color:#ff557244;color:var(--red);}
+.toast.error{border-color:#e0555544;color:#e08080;}
 </style>
 </head>
 <body>
 
+<!-- DB connection error banner -->
+<div class="db-banner" id="dbBanner">
+  <strong>⚠️ Database not connected — data will not be saved</strong>
+  Open <code>index.html</code> and replace the two placeholder values near the top of the &lt;script&gt; block:<br>
+  <code>SUPABASE_URL</code> → your project URL &nbsp;|&nbsp; <code>SUPABASE_KEY</code> → your anon/public key.<br>
+  Find these in your Supabase dashboard under <strong>Project Settings → API</strong>.
+</div>
+
 <!-- Loading screen -->
 <div class="loading-screen" id="loadingScreen">
   <div class="loading-spinner"></div>
-  <div class="loading-text">Loading wing night...</div>
+  <div class="loading-text">Loading...</div>
 </div>
 
 <!-- Toast notification -->
@@ -162,7 +177,6 @@ select option{background:var(--card)}
 
 <nav id="nav" style="display:none">
   <span class="nav-title">Wing Night</span>
-  <span class="nav-dot"></span>
   <button class="active" onclick="showTab('dashboard')">Dashboard</button>
   <button onclick="showTab('profiles')">Family</button>
   <button onclick="showTab('event')">Tonight</button>
@@ -178,12 +192,17 @@ select option{background:var(--card)}
 // =====================================================================
 // CONFIGURATION — paste your Supabase values here
 // =====================================================================
-    const SUPABASE_URL = 'https://jduczqwrdhcuhzdszhyk.supabase.co/rest/v1/';
-    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkdWN6cXdyZGhjdWh6ZHN6aHlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyNDU3NDAsImV4cCI6MjA5MjgyMTc0MH0.f1g-8f5DEluvCPeMlcmQR3fpD22bQYq-x7o52aIK7pA';
+const SUPABASE_URL = 'https://jduczqwrdhcuhzdszhyk.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkdWN6cXdyZGhjdWh6ZHN6aHlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyNDU3NDAsImV4cCI6MjA5MjgyMTc0MH0.f1g-8f5DEluvCPeMlcmQR3fpD22bQYq-x7o52aIK7pA';
 // =====================================================================
 
+const CREDENTIALS_SET = SUPABASE_URL !== 'YOUR_SUPABASE_URL_HERE' && SUPABASE_KEY !== 'YOUR_SUPABASE_ANON_KEY_HERE';
+
 const { createClient } = supabase;
-const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+const db = createClient(
+  CREDENTIALS_SET ? SUPABASE_URL : 'https://placeholder.supabase.co',
+  CREDENTIALS_SET ? SUPABASE_KEY : 'placeholder'
+);
 
 // =====================================================================
 // HISTORICAL DATA — loaded once on first run if DB is empty
@@ -243,7 +262,7 @@ let state = {
   sauceSearch: ''
 };
 
-let syncStatus = 'synced'; // 'synced' | 'syncing' | 'error'
+let syncStatus = 'synced';
 let chartInst = null;
 let saveSettingsTimer = null;
 
@@ -271,6 +290,12 @@ function setSyncStatus(s) {
 // SUPABASE — LOAD ALL DATA
 // =====================================================================
 async function loadAll() {
+  if (!CREDENTIALS_SET) {
+    document.getElementById('dbBanner').classList.add('show');
+    setSyncStatus('error');
+    return;
+  }
+
   try {
     // Load settings
     const { data: settingsRows } = await db.from('settings').select('*');
@@ -280,7 +305,6 @@ async function loadAll() {
         if (row.key === 'batches') state.batches = row.value;
       });
     } else {
-      // First run — seed default settings
       await db.from('settings').upsert([
         { key: 'costs', value: DEFAULT_SETTINGS.costs },
         { key: 'batches', value: DEFAULT_SETTINGS.batches }
@@ -335,7 +359,6 @@ async function loadAll() {
         extraWings: h.extra_wings
       }));
     } else {
-      // First run — seed historical data
       const { data: inserted } = await db.from('history').insert(HISTORICAL).select();
       if (inserted) {
         state.history = inserted.map(h => ({
@@ -352,14 +375,16 @@ async function loadAll() {
   } catch (err) {
     console.error('Load error:', err);
     setSyncStatus('error');
+    document.getElementById('dbBanner').classList.add('show');
     toast('Could not connect to database. Check your Supabase config.', true);
   }
 }
 
 // =====================================================================
-// SUPABASE — SAVE SETTINGS (debounced so fast typing doesn't spam)
+// SUPABASE — SAVE SETTINGS
 // =====================================================================
 function saveSettings() {
+  if (!CREDENTIALS_SET) return;
   clearTimeout(saveSettingsTimer);
   saveSettingsTimer = setTimeout(async () => {
     setSyncStatus('syncing');
@@ -377,6 +402,7 @@ function saveSettings() {
 }
 
 async function saveMemberToDB(member) {
+  if (!CREDENTIALS_SET) return;
   setSyncStatus('syncing');
   try {
     await db.from('members').upsert({
@@ -397,6 +423,7 @@ async function saveMemberToDB(member) {
 }
 
 async function deleteMemberFromDB(id) {
+  if (!CREDENTIALS_SET) return;
   setSyncStatus('syncing');
   try {
     await db.from('members').delete().eq('id', id);
@@ -408,6 +435,7 @@ async function deleteMemberFromDB(id) {
 }
 
 async function saveSauceToDB(sauce) {
+  if (!CREDENTIALS_SET) return;
   setSyncStatus('syncing');
   try {
     await db.from('sauces').upsert({
@@ -428,6 +456,7 @@ async function saveSauceToDB(sauce) {
 }
 
 async function deleteSauceFromDB(id) {
+  if (!CREDENTIALS_SET) return;
   setSyncStatus('syncing');
   try {
     await db.from('sauces').delete().eq('id', id);
@@ -439,6 +468,7 @@ async function deleteSauceFromDB(id) {
 }
 
 async function saveHistoryEntry(entry) {
+  if (!CREDENTIALS_SET) { toast('Database not connected — entry not saved.', true); return null; }
   setSyncStatus('syncing');
   try {
     const { data } = await db.from('history').insert({
@@ -465,6 +495,7 @@ async function saveHistoryEntry(entry) {
 }
 
 async function deleteHistoryFromDB(id) {
+  if (!CREDENTIALS_SET) return;
   setSyncStatus('syncing');
   try {
     await db.from('history').delete().eq('id', id);
@@ -567,9 +598,9 @@ function render() {
 function heatColor(h) {
   if (h <= 2) return '#7eb8ff';
   if (h <= 4) return '#5fdb8f';
-  if (h <= 6) return '#fbbf24';
-  if (h <= 8) return '#fb923c';
-  return '#ff5572';
+  if (h <= 6) return '#d4a017';
+  if (h <= 8) return '#e07830';
+  return '#e05555';
 }
 function heatLabel(h) {
   return h <= 2 ? 'Mild' : h <= 4 ? 'Medium' : h <= 6 ? 'Hot' : h <= 8 ? 'Very Hot' : 'Extreme';
@@ -619,7 +650,7 @@ function renderDashboard(r) {
     <div class="metric"><div class="metric-label">Avg Pack</div><div class="metric-val">$${r.avgPackCost.toFixed(2)}</div></div>
   </div>
   <div class="card mb10">
-    <div class="row-sb mb12"><span class="fw5">Wing Packs</span>
+    <div class="row-sb mb12"><span class="fw6">Wing Packs</span>
       <button class="btn btn-ghost btn-sm" onclick="addPack()">+ Add Pack</button></div>
     ${packRows}
     <hr class="divider">
@@ -627,7 +658,7 @@ function renderDashboard(r) {
     <input type="number" inputmode="numeric" value="${c.totalWings}" onchange="updateCost('totalWings', this.value)"/>
   </div>
   <div class="card mb10">
-    <div class="fw5 mb10">Extra Costs</div>
+    <div class="fw6 mb10">Extra Costs</div>
     <div class="grid2 mb10">
       <div><label>Oil ($)</label><input type="number" inputmode="decimal" step="0.01" value="${c.oilCost}" onchange="updateCost('oilCost', this.value)"/></div>
       <div><label>Sauce ($)</label><input type="number" inputmode="decimal" step="0.01" value="${c.sauceCost}" onchange="updateCost('sauceCost', this.value)"/></div>
@@ -637,12 +668,12 @@ function renderDashboard(r) {
     <hr class="divider">
     <div class="stat-row"><span class="text-sm text-muted">Extras</span><span>$${r.extraCosts.toFixed(2)}</span></div>
     <div class="stat-row"><span class="text-sm text-muted">Wings</span><span>$${r.totalWingCost.toFixed(2)}</span></div>
-    <div class="stat-row" style="border:none"><span class="fw5 text-lilac">Grand Total</span><span class="fw5 text-lilac" style="font-size:17px">$${r.totalCost.toFixed(2)}</span></div>
+    <div class="stat-row" style="border:none"><span class="fw6">Grand Total</span><span class="fw6" style="font-size:17px">$${r.totalCost.toFixed(2)}</span></div>
   </div>
   ${r.n > 0 ? `
   <div class="card">
     <div class="row-sb mb12">
-      <span class="fw5">${r.n} Attending Tonight</span>
+      <span class="fw6">${r.n} Attending Tonight</span>
       <button class="btn btn-success btn-sm" onclick="logEvent()">Save to History</button>
     </div>
     <div class="grid4">
@@ -670,8 +701,8 @@ function renderProfiles(r) {
       ? {id:'',name:'',noMax:true,maxWings:20,batches:['b1','b2','b3'],notes:'',attending:false}
       : state.members.find(x => x.id === em) || {};
     formHtml = `
-    <div class="card" style="border-color:#9b6dff44;margin-bottom:14px">
-      <div class="fw5 text-lilac mb14">${isNew ? 'New Profile' : 'Edit Profile'}</div>
+    <div class="card" style="border-color:#ffffff22;margin-bottom:14px">
+      <div class="fw6 mb14">${isNew ? 'New Profile' : 'Edit Profile'}</div>
       <label>Name</label>
       <input id="pf-name" value="${m.name||''}" placeholder="Family member name" class="mb10"/>
       <div class="check-row mb10">
@@ -701,6 +732,10 @@ function renderProfiles(r) {
     <div class="member-card ${m.attending ? 'attending' : ''}">
       <div class="row-sb">
         <div class="row gap8">
+          <label class="toggle">
+            <input type="checkbox" ${m.attending ? 'checked' : ''} onchange="toggleAttend('${m.id}', this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
           <div class="member-avatar">${m.name.substring(0,2).toUpperCase()}</div>
           <div>
             <div class="fw5" style="font-size:15px">${m.name}</div>
@@ -742,7 +777,7 @@ function renderEvent(r) {
         </div>
         <div style="text-align:right;flex-shrink:0">
           ${m.attending
-            ? `<div class="text-lilac fw5" style="font-size:16px">${wings} wings</div><div class="text-sm text-pink">$${contrib.toFixed(2)}</div>`
+            ? `<div class="fw5" style="font-size:16px">${wings} wings</div><div class="text-sm text-muted">$${contrib.toFixed(2)}</div>`
             : '<span class="tag tag-muted">Absent</span>'}
         </div>
       </div>
@@ -756,21 +791,21 @@ function renderEvent(r) {
     <div class="metric"><div class="metric-label">Attending</div><div class="metric-val">${r.n}</div></div>
     <div class="metric"><div class="metric-label">Wings Out</div><div class="metric-val">${r.totalDistributed}</div></div>
     <div class="metric"><div class="metric-label">Extra</div><div class="metric-val">${r.extraWings}</div></div>
-    <div class="metric"><div class="metric-label">Total</div><div class="metric-val text-pink">$${r.totalCost.toFixed(2)}</div></div>
+    <div class="metric"><div class="metric-label">Total</div><div class="metric-val">$${r.totalCost.toFixed(2)}</div></div>
   </div>
   <div class="card mb10">
-    <div class="fw5 mb10">Contributions</div>
+    <div class="fw6 mb10">Contributions</div>
     ${r.attending.map(m => `
     <div class="stat-row">
       <span>${m.name}</span>
       <div class="row gap8">
         <span class="text-sm text-muted">${r.wingAllotments[m.id]||0} wings</span>
-        <span class="fw5 text-lilac">$${(r.contributions[m.id]||0).toFixed(2)}</span>
+        <span class="fw5">$${(r.contributions[m.id]||0).toFixed(2)}</span>
       </div>
     </div>`).join('')}
     <div class="stat-row" style="border:none;margin-top:4px">
       <span class="text-sm text-muted">Total Collected</span>
-      <span class="fw5 text-pink">$${Object.values(r.contributions).reduce((a,b)=>a+b,0).toFixed(2)}</span>
+      <span class="fw6">$${Object.values(r.contributions).reduce((a,b)=>a+b,0).toFixed(2)}</span>
     </div>
   </div>` : '<div class="card text-sm text-muted mb10">Toggle attendees below to get started.</div>'}
   ${state.members.length === 0 ? '<div class="text-sm text-muted">Add profiles on the Family tab first.</div>' : rows}`;
@@ -796,7 +831,7 @@ function renderCook(r) {
           <span class="fw5" style="${!b.enabled ? 'color:var(--muted)' : ''}">${b.name}</span>
           ${!b.enabled ? '<span class="tag tag-muted">Off</span>' : ''}
         </div>
-        <span class="text-lilac fw5" style="font-size:18px">${b.enabled ? wings + ' wings' : '—'}</span>
+        <span class="fw5" style="font-size:18px">${b.enabled ? wings + ' wings' : '—'}</span>
       </div>
       ${b.enabled ? `
       <div class="batch-bar mb8"><div class="batch-bar-fill" style="width:${pct.toFixed(1)}%"></div></div>
@@ -814,16 +849,16 @@ function renderCook(r) {
   ${batchCards}
   ${r.n > 0 ? `
   <div class="card">
-    <div class="fw5 mb10">Per-Person Breakdown</div>
+    <div class="fw6 mb10">Per-Person Breakdown</div>
     ${r.attending.map(m => {
       const mb = (m.batches||[]).filter(bk => r.enabledBatches.includes(bk));
       const tw = r.wingAllotments[m.id] || 0;
       const pb = mb.length ? Math.round(tw / mb.length) : 0;
       return `
-      <div style="padding:8px 0;border-bottom:1px solid #2a264044">
+      <div style="padding:8px 0;border-bottom:1px solid #2e2e2e55">
         <div class="row-sb mb8"><span class="fw5">${m.name}</span><span class="text-sm text-muted">${tw} total</span></div>
         <div class="row gap8">${mb.length
-          ? mb.map(bk => `<span class="tag tag-purple">${state.batches[bk].name}: ${pb}</span>`).join('')
+          ? mb.map(bk => `<span class="tag tag-primary">${state.batches[bk].name}: ${pb}</span>`).join('')
           : '<span class="tag tag-red">No batches assigned</span>'}</div>
       </div>`;
     }).join('')}
@@ -843,12 +878,12 @@ function renderSauces() {
       : state.sauces.find(x => x.id === es) || {};
     const heat = s.heat || 5;
     formHtml = `
-    <div class="card" style="border-color:#9b6dff44;margin-bottom:14px">
-      <div class="fw5 text-lilac mb14">${isNew ? 'New Sauce' : 'Edit Sauce'}</div>
+    <div class="card" style="border-color:#ffffff22;margin-bottom:14px">
+      <div class="fw6 mb14">${isNew ? 'New Sauce' : 'Edit Sauce'}</div>
       <label>Sauce Name</label>
       <input id="sc-name" value="${s.name||''}" placeholder="e.g. Frank's RedHot" class="mb10"/>
       <label>Flavor Profile</label>
-      <input id="sc-flavor" value="${s.flavorProfile||''}" placeholder="e.g. Tangy, buttery, vinegar-forward with a smoky finish" class="mb10"/>
+      <input id="sc-flavor" value="${s.flavorProfile||''}" placeholder="e.g. Tangy, buttery, vinegar-forward" class="mb10"/>
       <label style="margin-bottom:8px">Heat Level:
         <span id="heat-disp" style="color:${heatColor(heat)};font-weight:500">${heat}/10 — ${heatLabel(heat)} ${heatEmoji(heat)}</span>
       </label>
@@ -904,7 +939,7 @@ function renderSauces() {
     <div class="sauce-card ${s.favorite ? 'favorited' : ''}">
       <div class="row-sb mb8">
         <div class="row gap8" style="flex:1;min-width:0">
-          <div class="sauce-icon" style="background:${hc}18;border:1px solid ${hc}44;font-size:20px">🫙</div>
+          <div class="sauce-icon">🫙</div>
           <div style="flex:1;min-width:0">
             <div class="fw5" style="font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.name}</div>
             <div style="font-size:11px;color:${hc};font-weight:500">${heatLabel(s.heat)} ${heatEmoji(s.heat)}</div>
@@ -920,7 +955,7 @@ function renderSauces() {
         ${s.glutenFree ? '<span class="tag tag-green">GF</span>' : ''}
         ${shuFmt ? `<span class="scoville-badge" style="color:${hc};border-color:${hc}44;background:${hc}12">🌡️ ${shuFmt}</span>` : ''}
       </div>
-      ${s.flavorProfile ? `<div class="text-sm" style="color:var(--lilac);font-style:italic;margin-bottom:${s.notes||shuCtx?'6px':'0'}">${s.flavorProfile}</div>` : ''}
+      ${s.flavorProfile ? `<div class="text-sm text-muted" style="font-style:italic;margin-bottom:${s.notes||shuCtx?'6px':'0'}">${s.flavorProfile}</div>` : ''}
       ${shuCtx && shu > 0 ? `<div class="text-sm text-muted" style="margin-bottom:${s.notes?'6px':'0'}">${shuCtx}</div>` : ''}
       ${s.notes ? `<div class="text-sm text-muted" style="font-style:italic">${s.notes}</div>` : ''}
     </div>`;
@@ -981,7 +1016,7 @@ function renderHistory() {
         <div class="text-sm text-muted">${e.people} people &middot; ${e.wings} wings</div>
       </div>
       <div style="text-align:right;flex-shrink:0">
-        <div class="text-lilac fw5">$${e.totalCost.toFixed(2)}</div>
+        <div class="fw5">$${e.totalCost.toFixed(2)}</div>
         <div class="text-sm text-muted">$${e.costPerWing.toFixed(3)}/wing</div>
       </div>
       <button class="btn btn-danger btn-sm" style="flex-shrink:0" onclick="deleteHistoryEntry('${e.id}')">✕</button>
@@ -994,13 +1029,13 @@ function renderHistory() {
 // CHARTS
 // =====================================================================
 const CHART_METRICS = [
-  {key:'totalCost',    label:'Total Cost ($)',               color:'#9b6dff'},
-  {key:'costPerWing',  label:'Cost Per Wing ($)',             color:'#e879a0'},
-  {key:'indContrib',   label:'Individual Contribution ($)',   color:'#c4a8ff'},
-  {key:'wings',        label:'Total Wings',                   color:'#7eb8ff'},
-  {key:'people',       label:'Attendees',                     color:'#5fdb8f'},
-  {key:'wingsPerPerson',label:'Wings Per Person',             color:'#ff9de2'},
-  {key:'extraWings',   label:'Extra Wings',                   color:'#ff5572'},
+  {key:'totalCost',    label:'Total Cost ($)',               color:'#aaaaaa'},
+  {key:'costPerWing',  label:'Cost Per Wing ($)',             color:'#cccccc'},
+  {key:'indContrib',   label:'Individual Contribution ($)',   color:'#999999'},
+  {key:'wings',        label:'Total Wings',                   color:'#888888'},
+  {key:'people',       label:'Attendees',                     color:'#bbbbbb'},
+  {key:'wingsPerPerson',label:'Wings Per Person',             color:'#dddddd'},
+  {key:'extraWings',   label:'Extra Wings',                   color:'#777777'},
 ];
 
 function renderCharts() {
@@ -1017,18 +1052,18 @@ function renderCharts() {
     <div class="chart-wrap"><canvas id="mainChart"></canvas></div>
   </div>
   <div class="card mb10">
-    <div class="fw5 mb10">All-Time Stats</div>
+    <div class="fw6 mb10">All-Time Stats</div>
     ${[['Events', h.length],['Avg Total Cost','$'+avg('totalCost').toFixed(2)],
       ['Avg $/Wing','$'+avg('costPerWing').toFixed(3)],['Avg Attendance',avg('people').toFixed(1)],
       ['Most Wings Ever',max('wings')],['Cheapest $/Wing','$'+min('costPerWing').toFixed(3)]]
-      .map(([l,v]) => `<div class="stat-row"><span class="text-sm text-muted">${l}</span><span class="fw5 text-lilac">${v}</span></div>`).join('')}
+      .map(([l,v]) => `<div class="stat-row"><span class="text-sm text-muted">${l}</span><span class="fw5">${v}</span></div>`).join('')}
   </div>
   <div class="card">
-    <div class="fw5 mb10">Last 5 Nights</div>
+    <div class="fw6 mb10">Last 5 Nights</div>
     ${h.slice(-5).map(e => `
     <div class="stat-row">
       <span class="text-sm text-muted">${e.date}</span>
-      <div class="row gap8"><span class="text-sm">${e.wings} wings</span><span class="fw5 text-lilac">$${e.totalCost.toFixed(2)}</span></div>
+      <div class="row gap8"><span class="text-sm">${e.wings} wings</span><span class="fw5">$${e.totalCost.toFixed(2)}</span></div>
     </div>`).join('')}
   </div>`;
 }
@@ -1055,8 +1090,8 @@ function drawChart() {
         label: c => { const v = c.parsed.y; return ['totalCost','costPerWing','indContrib'].includes(metric.key) ? '$'+v.toFixed(2) : ''+v; }
       }}},
       scales: {
-        x: { ticks: {color:'#6b6785', maxRotation:45, font:{size:9}}, grid: {color:'#2a264044'} },
-        y: { ticks: {color:'#6b6785', font:{size:10}}, grid: {color:'#2a264044'} }
+        x: { ticks: {color:'#666', maxRotation:45, font:{size:9}}, grid: {color:'#2e2e2e'} },
+        y: { ticks: {color:'#666', font:{size:10}}, grid: {color:'#2e2e2e'} }
       }
     }
   });
