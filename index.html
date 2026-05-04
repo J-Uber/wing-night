@@ -59,8 +59,12 @@ label{font-size:12px;color:var(--muted);display:block;margin-bottom:5px;letter-s
 input,select,textarea{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;color:var(--text);font-family:'Inter',sans-serif;font-size:16px;font-weight:300;-webkit-appearance:none;appearance:none;}
 input:focus,select:focus,textarea:focus{outline:none;border-color:#ffffff33;box-shadow:0 0 0 2px #ffffff09}
 input[type=checkbox]{width:20px;height:20px;accent-color:var(--text);flex-shrink:0;}
-input[type=range]{padding:4px 0;accent-color:var(--text);background:transparent;border:none;}
+input[type=range]{padding:4px 0;accent-color:var(--text);background:transparent;border:none;-webkit-appearance:none;appearance:none;height:20px;}
 input[type=range]:focus{box-shadow:none;}
+input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;background:#444;}
+input[type=range]::-moz-range-track{height:6px;border-radius:3px;background:#444;}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:var(--text);margin-top:-8px;cursor:pointer;border:2px solid #666;}
+input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:var(--text);cursor:pointer;border:2px solid #666;}
 textarea{resize:vertical;min-height:60px;font-size:15px;}
 select option{background:var(--card)}
 
@@ -209,7 +213,7 @@ const db = createClient(
 // =====================================================================
 const HISTORICAL = [
   {date:'12/10/24',people:5,wings:88,wing_cost:43.87,oil:5,sauce:2.5,milk:0,total_cost:51.37,cost_per_wing:0.58,ind_contrib:10.27,wings_per_person:17,extra_wings:3},
-  {date:'1/7/25',people:5,wings:84,wing_cost:43.13,oil:5,sauce:2.5,milk:0,total_cost:52.63,cost_per_wing:0.63,ind_contrib:10.53,wings_per_person:16,extra_wings:4},
+  {date:'1/7/25',people:5,wings:84,wing_cost:45.13,oil:5,sauce:2.5,milk:0,total_cost:52.63,cost_per_wing:0.63,ind_contrib:10.53,wings_per_person:16,extra_wings:4},
   {date:'1/21/25',people:5,wings:90,wing_cost:40.44,oil:5,sauce:2.5,milk:0,total_cost:47.94,cost_per_wing:0.53,ind_contrib:9.59,wings_per_person:18,extra_wings:0},
   {date:'2/18/25',people:6,wings:102,wing_cost:55.63,oil:5,sauce:2.5,milk:0,total_cost:63.13,cost_per_wing:0.62,ind_contrib:10.52,wings_per_person:17,extra_wings:0},
   {date:'3/4/25',people:5,wings:96,wing_cost:45.24,oil:5,sauce:2.5,milk:0,total_cost:52.74,cost_per_wing:0.55,ind_contrib:10.55,wings_per_person:19,extra_wings:1},
@@ -222,13 +226,13 @@ const HISTORICAL = [
   {date:'6/24/25',people:6,wings:104,wing_cost:59.93,oil:10,sauce:5,milk:2.48,total_cost:77.41,cost_per_wing:0.74,ind_contrib:12.90,wings_per_person:17,extra_wings:2},
   {date:'7/22/25',people:7,wings:124,wing_cost:66.62,oil:10,sauce:5,milk:2.48,total_cost:84.10,cost_per_wing:0.68,ind_contrib:12.01,wings_per_person:17,extra_wings:5},
   {date:'8/4/25',people:6,wings:110,wing_cost:56.25,oil:15,sauce:5,milk:2.98,total_cost:79.23,cost_per_wing:0.72,ind_contrib:13.21,wings_per_person:18,extra_wings:2},
-  {date:'8/19/25',people:6,wings:150,wing_cost:54.41,oil:15,sauce:5,milk:2.98,total_cost:77.39,cost_per_wing:0.52,ind_contrib:11.06,wings_per_person:21,extra_wings:3},
+  {date:'8/19/25',people:7,wings:150,wing_cost:54.41,oil:15,sauce:5,milk:2.98,total_cost:77.39,cost_per_wing:0.52,ind_contrib:11.06,wings_per_person:21,extra_wings:3},
   {date:'9/2/25',people:7,wings:141,wing_cost:52.35,oil:15,sauce:5,milk:2.98,total_cost:75.33,cost_per_wing:0.53,ind_contrib:10.76,wings_per_person:20,extra_wings:1},
   {date:'9/30/25',people:8,wings:145,wing_cost:56.11,oil:15,sauce:5,milk:2.98,total_cost:79.09,cost_per_wing:0.55,ind_contrib:9.89,wings_per_person:18,extra_wings:1},
   {date:'10/14/25',people:8,wings:186,wing_cost:69.85,oil:15,sauce:5,milk:2.98,total_cost:92.83,cost_per_wing:0.50,ind_contrib:11.60,wings_per_person:23,extra_wings:2},
   {date:'10/28/25',people:8,wings:151,wing_cost:56.37,oil:15,sauce:5,milk:2.98,total_cost:79.35,cost_per_wing:0.53,ind_contrib:9.92,wings_per_person:18,extra_wings:7},
   {date:'11/11/25',people:7,wings:121,wing_cost:49.25,oil:15,sauce:10,milk:2.98,total_cost:77.23,cost_per_wing:0.64,ind_contrib:11.03,wings_per_person:17,extra_wings:2},
-  {date:'11/25/25',people:8,wings:148,wing_cost:54.65,oil:15,sauce:10,milk:2.98,total_cost:82.63,cost_per_wing:0.56,ind_contrib:11.80,wings_per_person:18,extra_wings:1},
+  {date:'11/25/25',people:7,wings:148,wing_cost:54.65,oil:15,sauce:10,milk:2.98,total_cost:82.63,cost_per_wing:0.56,ind_contrib:11.80,wings_per_person:21,extra_wings:1},
   {date:'12/9/25',people:8,wings:131,wing_cost:50.66,oil:15,sauce:10,milk:2.98,total_cost:78.64,cost_per_wing:0.60,ind_contrib:9.83,wings_per_person:16,extra_wings:3},
   {date:'1/6/26',people:7,wings:138,wing_cost:50.87,oil:15,sauce:10,milk:2.98,total_cost:78.85,cost_per_wing:0.57,ind_contrib:11.26,wings_per_person:19,extra_wings:5},
   {date:'1/20/26',people:6,wings:102,wing_cost:37.55,oil:15,sauce:10,milk:2.98,total_cost:65.53,cost_per_wing:0.64,ind_contrib:10.92,wings_per_person:17,extra_wings:0},
@@ -237,6 +241,7 @@ const HISTORICAL = [
   {date:'3/17/26',people:8,wings:145,wing_cost:52.11,oil:15,sauce:10,milk:2.98,total_cost:80.09,cost_per_wing:0.55,ind_contrib:10.01,wings_per_person:18,extra_wings:1},
   {date:'3/31/26',people:9,wings:173,wing_cost:67.11,oil:15,sauce:15,milk:2.98,total_cost:100.09,cost_per_wing:0.58,ind_contrib:11.12,wings_per_person:19,extra_wings:2},
   {date:'4/14/26',people:8,wings:156,wing_cost:54.36,oil:15,sauce:15,milk:2.98,total_cost:87.34,cost_per_wing:0.56,ind_contrib:10.92,wings_per_person:19,extra_wings:4},
+  {date:'4/28/26',people:7,wings:144,wing_cost:52.41,oil:15,sauce:15,milk:2.98,total_cost:85.39,cost_per_wing:0.59,ind_contrib:12.20,wings_per_person:20,extra_wings:4},
 ];
 
 const DEFAULT_SETTINGS = {
@@ -705,19 +710,27 @@ function renderProfiles(r) {
       <div class="fw6 mb14">${isNew ? 'New Profile' : 'Edit Profile'}</div>
       <label>Name</label>
       <input id="pf-name" value="${m.name||''}" placeholder="Family member name" class="mb10"/>
-      <div class="check-row mb10">
-        <input type="checkbox" id="pf-nomax" ${m.noMax ? 'checked' : ''} onchange="toggleNoMax(this.checked)">
-        <label for="pf-nomax">No Maximum Wings</label>
+      <div class="row-sb mb10" style="padding:10px 12px;background:var(--card2);border:1px solid var(--border);border-radius:var(--radius);">
+        <span style="font-size:14px;color:var(--text)">No Maximum Wings</span>
+        <label class="toggle">
+          <input type="checkbox" id="pf-nomax" ${m.noMax ? 'checked' : ''} onchange="toggleNoMax(this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
       </div>
       <div id="pf-maxwrap" style="${m.noMax ? 'display:none' : ''}">
         <label>Max Wings</label>
         <input id="pf-maxwings" type="number" inputmode="numeric" value="${m.maxWings||20}" class="mb10"/>
       </div>
       <label>Available Batches</label>
-      <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:12px">
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
         ${Object.entries(state.batches).map(([k,b]) =>
-          `<div class="check-row"><input type="checkbox" id="pf-batch-${k}" ${(m.batches||[]).includes(k)?'checked':''}>
-          <label for="pf-batch-${k}">${b.name}</label></div>`).join('')}
+          `<div class="row-sb" style="padding:10px 12px;background:var(--card2);border:1px solid var(--border);border-radius:var(--radius);">
+            <span style="font-size:14px;color:var(--text)">${b.name}</span>
+            <label class="toggle">
+              <input type="checkbox" id="pf-batch-${k}" ${(m.batches||[]).includes(k)?'checked':''}>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>`).join('')}
       </div>
       <label>Notes / Special Requests</label>
       <textarea id="pf-notes" placeholder="e.g. extra crispy, no sauce..." class="mb10">${m.notes||''}</textarea>
