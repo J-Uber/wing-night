@@ -135,6 +135,7 @@ select option{background:var(--card)}
 /* SAUCE */
 .sauce-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-bottom:10px;transition:border-color .2s;}
 .sauce-card.favorited{border-color:#d4a01740;}
+.sauce-card.oos{opacity:0.6;}
 .heat-bar{display:flex;gap:3px;margin-top:4px;}
 .heat-pip{width:18px;height:6px;border-radius:2px;background:var(--card2);}
 .heat-pip.lit{background:var(--heat-color);}
@@ -342,7 +343,8 @@ async function loadAll() {
         scoville: s.scoville || '',
         glutenFree: s.gluten_free || false,
         notes: s.notes || '',
-        favorite: s.favorite || false
+        favorite: s.favorite || false,
+        outOfStock: s.out_of_stock || false
       }));
     }
 
@@ -453,7 +455,8 @@ async function saveSauceToDB(sauce) {
       scoville: sauce.scoville,
       gluten_free: sauce.glutenFree,
       notes: sauce.notes,
-      favorite: sauce.favorite
+      favorite: sauce.favorite,
+      out_of_stock: sauce.outOfStock
     });
     setSyncStatus('synced');
   } catch (err) {
@@ -922,7 +925,7 @@ function renderSauces() {
   if (es !== null) {
     const isNew = es === 'new';
     const s = isNew
-      ? {id:'',name:'',brand:'',flavorProfile:'',heat:5,scoville:'',glutenFree:false,notes:'',favorite:false}
+      ? {id:'',name:'',brand:'',flavorProfile:'',heat:5,scoville:'',glutenFree:false,notes:'',favorite:false,outOfStock:false}
       : state.sauces.find(x => x.id === es) || {};
     const heat = s.heat || 5;
     formHtml = `
@@ -957,6 +960,13 @@ function renderSauces() {
           <span class="toggle-slider"></span>
         </label>
       </div>
+      <div class="row-sb mb10" style="padding:10px 12px;background:var(--card2);border:1px solid var(--border);border-radius:var(--radius);">
+        <span style="font-size:14px;color:var(--text)">🚫 Out of Stock</span>
+        <label class="toggle">
+          <input type="checkbox" id="sc-oos" ${s.outOfStock ? 'checked' : ''}>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
       <label>Notes</label>
       <textarea id="sc-notes" placeholder="Tasting notes, where to buy, who loves it..." class="mb10">${s.notes||''}</textarea>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -976,6 +986,8 @@ function renderSauces() {
     (s.notes||'').toLowerCase().includes(search));
   if (state.sauceFilter === 'favorites') sauces = sauces.filter(s => s.favorite);
   else if (state.sauceFilter === 'glutenFree') sauces = sauces.filter(s => s.glutenFree);
+  else if (state.sauceFilter === 'outOfStock') sauces = sauces.filter(s => s.outOfStock);
+  else if (state.sauceFilter === 'inStock') sauces = sauces.filter(s => !s.outOfStock);
   else if (state.sauceFilter === 'mild') sauces = sauces.filter(s => s.heat <= 4);
   else if (state.sauceFilter === 'medium') sauces = sauces.filter(s => s.heat > 4 && s.heat < 7);
   else if (state.sauceFilter === 'hot') sauces = sauces.filter(s => s.heat >= 7);
@@ -993,7 +1005,7 @@ function renderSauces() {
     const shuFmt = formatScoville(shu);
     const shuCtx = scovilleContext(shu);
     return `
-    <div class="sauce-card ${s.favorite ? 'favorited' : ''}">
+    <div class="sauce-card ${s.favorite ? 'favorited' : ''} ${s.outOfStock ? 'oos' : ''}">
       <div class="row-sb mb8">
         <div class="row gap8" style="flex:1;min-width:0">
           <div class="sauce-icon">🫙</div>
@@ -1010,6 +1022,7 @@ function renderSauces() {
       </div>
       <div class="heat-bar mb8">${pips}</div>
       <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:${s.flavorProfile||s.notes||shuFmt?'8px':'0'}">
+        ${s.outOfStock ? '<span class="tag tag-red">Out of Stock</span>' : ''}
         ${s.glutenFree ? '<span class="tag tag-green">GF</span>' : ''}
         ${shuFmt ? `<span class="scoville-badge" style="color:${hc};border-color:${hc}44;background:${hc}12">🌡️ ${shuFmt}</span>` : ''}
       </div>
@@ -1022,6 +1035,7 @@ function renderSauces() {
   const total = state.sauces.length;
   const favCount = state.sauces.filter(s => s.favorite).length;
   const gfCount = state.sauces.filter(s => s.glutenFree).length;
+  const oosCount = state.sauces.filter(s => s.outOfStock).length;
   const avgHeat = total ? (state.sauces.reduce((a, s) => a + s.heat, 0) / total).toFixed(1) : '—';
 
   return `
@@ -1033,12 +1047,13 @@ function renderSauces() {
     <div class="metric"><div class="metric-label">Total Sauces</div><div class="metric-val">${total}</div></div>
     <div class="metric"><div class="metric-label">Favorites</div><div class="metric-val text-gold">${favCount}</div></div>
     <div class="metric"><div class="metric-label">Gluten Free</div><div class="metric-val text-green">${gfCount}</div></div>
+    <div class="metric"><div class="metric-label">Out of Stock</div><div class="metric-val text-red">${oosCount}</div></div>
     <div class="metric"><div class="metric-label">Avg Heat</div><div class="metric-val">${avgHeat}</div></div>
   </div>
   <input type="search" placeholder="Search sauces..." value="${state.sauceSearch||''}"
     oninput="updateSauceSearch(this)" class="mb10"/>
   <div class="filter-bar">
-    ${[['all','All'],['favorites','⭐ Favorites'],['glutenFree','GF Only'],['mild','Mild'],['medium','Medium'],['hot','Hot']].map(([k,l]) =>
+    ${[['all','All'],['favorites','⭐ Favorites'],['glutenFree','GF Only'],['outOfStock','🚫 Out of Stock'],['inStock','✅ In Stock'],['mild','Mild'],['medium','Medium'],['hot','Hot']].map(([k,l]) =>
       `<button class="filter-chip ${state.sauceFilter===k?'active':''}" onclick="setSauceFilter('${k}')">${l}</button>`).join('')}
   </div>
   <div class="sort-row">
@@ -1296,14 +1311,15 @@ async function saveSauce(id) {
   const scoville = document.getElementById('sc-scoville').value.trim();
   const glutenFree = document.getElementById('sc-gf').checked;
   const favorite = document.getElementById('sc-fav').checked;
+  const outOfStock = document.getElementById('sc-oos').checked;
   const notes = document.getElementById('sc-notes').value.trim();
   let sauce;
   if (id === 'new') {
-    sauce = { id: 's' + Date.now(), name, brand, flavorProfile, heat, scoville, glutenFree, notes, favorite };
+    sauce = { id: 's' + Date.now(), name, brand, flavorProfile, heat, scoville, glutenFree, notes, favorite, outOfStock };
     state.sauces.push(sauce);
   } else {
     const idx = state.sauces.findIndex(s => s.id === id);
-    if (idx >= 0) { state.sauces[idx] = {...state.sauces[idx], name, brand, flavorProfile, heat, scoville, glutenFree, notes, favorite}; sauce = state.sauces[idx]; }
+    if (idx >= 0) { state.sauces[idx] = {...state.sauces[idx], name, brand, flavorProfile, heat, scoville, glutenFree, notes, favorite, outOfStock}; sauce = state.sauces[idx]; }
   }
   state.editingSauce = null;
   render();
