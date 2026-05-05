@@ -336,6 +336,7 @@ async function loadAll() {
       state.sauces = sauces.map(s => ({
         id: s.id,
         name: s.name,
+        brand: s.brand || '',
         flavorProfile: s.flavor_profile || '',
         heat: s.heat || 5,
         scoville: s.scoville || '',
@@ -446,6 +447,7 @@ async function saveSauceToDB(sauce) {
     await db.from('sauces').upsert({
       id: sauce.id,
       name: sauce.name,
+      brand: sauce.brand,
       flavor_profile: sauce.flavorProfile,
       heat: sauce.heat,
       scoville: sauce.scoville,
@@ -887,14 +889,16 @@ function renderSauces() {
   if (es !== null) {
     const isNew = es === 'new';
     const s = isNew
-      ? {id:'',name:'',flavorProfile:'',heat:5,scoville:'',glutenFree:false,notes:'',favorite:false}
+      ? {id:'',name:'',brand:'',flavorProfile:'',heat:5,scoville:'',glutenFree:false,notes:'',favorite:false}
       : state.sauces.find(x => x.id === es) || {};
     const heat = s.heat || 5;
     formHtml = `
     <div class="card" style="border-color:#ffffff22;margin-bottom:14px">
       <div class="fw6 mb14">${isNew ? 'New Sauce' : 'Edit Sauce'}</div>
       <label>Sauce Name</label>
-      <input id="sc-name" value="${s.name||''}" placeholder="e.g. Frank's RedHot" class="mb10"/>
+      <input id="sc-name" value="${s.name||''}" placeholder="e.g. Frank's RedHot Original" class="mb10"/>
+      <label>Brand</label>
+      <input id="sc-brand" value="${s.brand||''}" placeholder="e.g. Frank's RedHot" class="mb10"/>
       <label>Flavor Profile</label>
       <input id="sc-flavor" value="${s.flavorProfile||''}" placeholder="e.g. Tangy, buttery, vinegar-forward" class="mb10"/>
       <label style="margin-bottom:8px">Heat Level:
@@ -906,13 +910,19 @@ function renderSauces() {
       <input id="sc-scoville" type="number" inputmode="numeric" value="${s.scoville||''}"
         placeholder="e.g. 450000" class="mb10" oninput="updateScovilleCtx()"/>
       <div id="sc-scoville-ctx" class="text-sm text-muted mb10" style="${s.scoville?'':'display:none'}">${scovilleContext(parseInt(s.scoville)||0)}</div>
-      <div class="check-row mb10">
-        <input type="checkbox" id="sc-gf" ${s.glutenFree ? 'checked' : ''}>
-        <label for="sc-gf">Gluten Free</label>
+      <div class="row-sb mb10" style="padding:10px 12px;background:var(--card2);border:1px solid var(--border);border-radius:var(--radius);">
+        <span style="font-size:14px;color:var(--text)">Gluten Free</span>
+        <label class="toggle">
+          <input type="checkbox" id="sc-gf" ${s.glutenFree ? 'checked' : ''}>
+          <span class="toggle-slider"></span>
+        </label>
       </div>
-      <div class="check-row mb10">
-        <input type="checkbox" id="sc-fav" ${s.favorite ? 'checked' : ''}>
-        <label for="sc-fav">⭐ Favorite</label>
+      <div class="row-sb mb10" style="padding:10px 12px;background:var(--card2);border:1px solid var(--border);border-radius:var(--radius);">
+        <span style="font-size:14px;color:var(--text)">⭐ Favorite</span>
+        <label class="toggle">
+          <input type="checkbox" id="sc-fav" ${s.favorite ? 'checked' : ''}>
+          <span class="toggle-slider"></span>
+        </label>
       </div>
       <label>Notes</label>
       <textarea id="sc-notes" placeholder="Tasting notes, where to buy, who loves it..." class="mb10">${s.notes||''}</textarea>
@@ -928,6 +938,7 @@ function renderSauces() {
   const search = (state.sauceSearch || '').toLowerCase();
   if (search) sauces = sauces.filter(s =>
     s.name.toLowerCase().includes(search) ||
+    (s.brand||'').toLowerCase().includes(search) ||
     (s.flavorProfile||'').toLowerCase().includes(search) ||
     (s.notes||'').toLowerCase().includes(search));
   if (state.sauceFilter === 'favorites') sauces = sauces.filter(s => s.favorite);
@@ -955,6 +966,7 @@ function renderSauces() {
           <div class="sauce-icon">🫙</div>
           <div style="flex:1;min-width:0">
             <div class="fw5" style="font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.name}</div>
+            ${s.brand ? `<div class="text-sm text-muted" style="margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.brand}</div>` : ''}
             <div style="font-size:11px;color:${hc};font-weight:500">${heatLabel(s.heat)} ${heatEmoji(s.heat)}</div>
           </div>
         </div>
@@ -1073,7 +1085,7 @@ function renderCharts() {
   </div>
   <div class="card">
     <div class="fw6 mb10">Last 5 Nights</div>
-    ${h.slice(-5).map(e => `
+    ${[...h].reverse().slice(0, 5).map(e => `
     <div class="stat-row">
       <span class="text-sm text-muted">${e.date}</span>
       <div class="row gap8"><span class="text-sm">${e.wings} wings</span><span class="fw5">$${e.totalCost.toFixed(2)}</span></div>
@@ -1212,6 +1224,7 @@ function updateScovilleCtx() {
 async function saveSauce(id) {
   const name = document.getElementById('sc-name').value.trim();
   if (!name) return toast('Please enter a sauce name.', true);
+  const brand = document.getElementById('sc-brand').value.trim();
   const heat = parseInt(document.getElementById('sc-heat').value) || 5;
   const flavorProfile = document.getElementById('sc-flavor').value.trim();
   const scoville = document.getElementById('sc-scoville').value.trim();
@@ -1220,11 +1233,11 @@ async function saveSauce(id) {
   const notes = document.getElementById('sc-notes').value.trim();
   let sauce;
   if (id === 'new') {
-    sauce = { id: 's' + Date.now(), name, flavorProfile, heat, scoville, glutenFree, notes, favorite };
+    sauce = { id: 's' + Date.now(), name, brand, flavorProfile, heat, scoville, glutenFree, notes, favorite };
     state.sauces.push(sauce);
   } else {
     const idx = state.sauces.findIndex(s => s.id === id);
-    if (idx >= 0) { state.sauces[idx] = {...state.sauces[idx], name, flavorProfile, heat, scoville, glutenFree, notes, favorite}; sauce = state.sauces[idx]; }
+    if (idx >= 0) { state.sauces[idx] = {...state.sauces[idx], name, brand, flavorProfile, heat, scoville, glutenFree, notes, favorite}; sauce = state.sauces[idx]; }
   }
   state.editingSauce = null;
   render();
