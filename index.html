@@ -560,18 +560,49 @@ function calc() {
   for (let m of attending) contributions[m.id] = (wingAllotments[m.id] || 0) * totalCostPerWing;
 
   const enabledBatches = Object.entries(state.batches).filter(([k, b]) => b.enabled).map(([k]) => k);
+
+  // Balance batch wings: assign each person to their earliest batch first,
+  // then forward-pass excess to later batches to equalise totals.
+  let personBatch = {}; // personBatch[memberId][batchKey] = wings
   let batchWings = {};
   for (let bk of enabledBatches) batchWings[bk] = 0;
+  for (let m of attending) personBatch[m.id] = Object.fromEntries(enabledBatches.map(b => [b, 0]));
+
   for (let m of attending) {
     const wings = wingAllotments[m.id] || 0;
     if (!wings) continue;
     const mb = (m.batches || []).filter(b => enabledBatches.includes(b));
     if (!mb.length) continue;
-    const pb = wings / mb.length;
-    for (let b of mb) batchWings[b] = (batchWings[b] || 0) + pb;
+    personBatch[m.id][mb[0]] = wings;
+    batchWings[mb[0]] += wings;
   }
 
-  return { totalWingCost, totalWings, baseCostPerWing, avgPackCost, extraCosts, totalCost, attending, n, wingAllotments, contributions, extraWings, totalDistributed, totalCostPerWing, batchWings, enabledBatches };
+  if (enabledBatches.length > 1) {
+    const totalW = Object.values(batchWings).reduce((a, b) => a + b, 0);
+    const target = totalW / enabledBatches.length;
+    for (let i = 0; i < enabledBatches.length - 1; i++) {
+      const b = enabledBatches[i];
+      const excess = batchWings[b] - target;
+      if (excess <= 0.001) continue;
+      const laterBatches = enabledBatches.slice(i + 1);
+      const moveable = attending
+        .filter(m => personBatch[m.id][b] > 0 && (m.batches||[]).some(lb => laterBatches.includes(lb)))
+        .map(m => ({ m, w: personBatch[m.id][b] }));
+      const totalMoveable = moveable.reduce((a, x) => a + x.w, 0);
+      if (!totalMoveable) continue;
+      const toMove = Math.min(excess, totalMoveable);
+      for (const { m, w } of moveable) {
+        const moveAmt = toMove * (w / totalMoveable);
+        const nextB = laterBatches.find(lb => (m.batches||[]).includes(lb));
+        personBatch[m.id][b] -= moveAmt;
+        personBatch[m.id][nextB] += moveAmt;
+        batchWings[b] -= moveAmt;
+        batchWings[nextB] += moveAmt;
+      }
+    }
+  }
+
+  return { totalWingCost, totalWings, baseCostPerWing, avgPackCost, extraCosts, totalCost, attending, n, wingAllotments, contributions, extraWings, totalDistributed, totalCostPerWing, batchWings, personBatch, enabledBatches };
 }
 
 // =====================================================================
@@ -851,7 +882,7 @@ function renderCook(r) {
       ${b.enabled ? `
       <div class="batch-bar mb8"><div class="batch-bar-fill" style="width:${pct.toFixed(1)}%"></div></div>
       <div class="text-sm text-muted">${bm.length
-        ? bm.map(m => `${m.name} (${Math.round((r.wingAllotments[m.id]||0) / ((m.batches||[]).filter(bk => r.enabledBatches.includes(bk)).length || 1))})`).join(', ')
+        ? bm.map(m => { const w = Math.round(r.personBatch[m.id]?.[k] || 0); return w > 0 ? `${m.name} (${w})` : null; }).filter(Boolean).join(', ') || 'No wings this batch'
         : 'No attendees in this batch'}</div>` : ''}
     </div>`;
   }).join('');
@@ -868,12 +899,14 @@ function renderCook(r) {
     ${r.attending.map(m => {
       const mb = (m.batches||[]).filter(bk => r.enabledBatches.includes(bk));
       const tw = r.wingAllotments[m.id] || 0;
-      const pb = mb.length ? Math.round(tw / mb.length) : 0;
       return `
       <div style="padding:8px 0;border-bottom:1px solid #2e2e2e55">
         <div class="row-sb mb8"><span class="fw5">${m.name}</span><span class="text-sm text-muted">${tw} total</span></div>
         <div class="row gap8">${mb.length
-          ? mb.map(bk => `<span class="tag tag-primary">${state.batches[bk].name}: ${pb}</span>`).join('')
+          ? mb.map(bk => {
+              const w = Math.round(r.personBatch[m.id]?.[bk] || 0);
+              return w > 0 ? `<span class="tag tag-primary">${state.batches[bk].name}: ${w}</span>` : '';
+            }).filter(Boolean).join('')
           : '<span class="tag tag-red">No batches assigned</span>'}</div>
       </div>`;
     }).join('')}
@@ -905,7 +938,7 @@ function renderSauces() {
         <span id="heat-disp" style="color:${heatColor(heat)};font-weight:500">${heat}/10 — ${heatLabel(heat)} ${heatEmoji(heat)}</span>
       </label>
       <input type="range" min="1" max="10" value="${heat}" id="sc-heat"
-        oninput="updateHeatDisplay(this.value)" style="width:100%" class="mb10"/>
+        oninput="updateHeatDisplay(this.value, true)" style="width:100%" class="mb10"/>
       <label>Scoville Units (SHU) <span class="text-muted text-sm">— optional</span></label>
       <input id="sc-scoville" type="number" inputmode="numeric" value="${s.scoville||''}"
         placeholder="e.g. 450000" class="mb10" oninput="updateScovilleCtx()"/>
@@ -1003,7 +1036,7 @@ function renderSauces() {
     <div class="metric"><div class="metric-label">Avg Heat</div><div class="metric-val">${avgHeat}</div></div>
   </div>
   <input type="search" placeholder="Search sauces..." value="${state.sauceSearch||''}"
-    oninput="state.sauceSearch=this.value;render()" class="mb10"/>
+    oninput="updateSauceSearch(this)" class="mb10"/>
   <div class="filter-bar">
     ${[['all','All'],['favorites','⭐ Favorites'],['glutenFree','GF Only'],['mild','Mild'],['medium','Medium'],['hot','Hot']].map(([k,l]) =>
       `<button class="filter-chip ${state.sauceFilter===k?'active':''}" onclick="setSauceFilter('${k}')">${l}</button>`).join('')}
@@ -1203,15 +1236,41 @@ async function toggleBatch(k, val) {
 // =====================================================================
 // ACTIONS — SAUCES
 // =====================================================================
-function newSauce()          { state.editingSauce = 'new'; render(); }
-function editSauce(id)       { state.editingSauce = id; render(); }
+function newSauce()          { state.editingSauce = 'new'; heatManualOverride = false; render(); }
+function editSauce(id)       { state.editingSauce = id; heatManualOverride = false; render(); }
 function cancelSauceEdit()   { state.editingSauce = null; render(); }
 function setSauceFilter(f)   { state.sauceFilter = f; render(); }
 
-function updateHeatDisplay(val) {
+function updateSauceSearch(input) {
+  state.sauceSearch = input.value;
+  const cursorPos = input.selectionStart;
+  render();
+  const newInput = document.querySelector('input[type="search"]');
+  if (newInput) { newInput.focus(); newInput.setSelectionRange(cursorPos, cursorPos); }
+}
+
+let heatManualOverride = false;
+
+function scovilleToHeat(shu) {
+  if (!shu || shu <= 0) return null;
+  if (shu < 1000)    return 1;
+  if (shu < 5000)    return 2;
+  if (shu < 15000)   return 3;
+  if (shu < 50000)   return 4;
+  if (shu < 100000)  return 5;
+  if (shu < 300000)  return 6;
+  if (shu < 700000)  return 7;
+  if (shu < 1500000) return 8;
+  if (shu < 2500000) return 9;
+  return 10;
+}
+
+function updateHeatDisplay(val, fromUser = false) {
+  if (fromUser) heatManualOverride = true;
   const disp = document.getElementById('heat-disp');
   if (disp) { const h = parseInt(val); disp.style.color = heatColor(h); disp.textContent = `${h}/10 — ${heatLabel(h)} ${heatEmoji(h)}`; }
 }
+
 function updateScovilleCtx() {
   const inp = document.getElementById('sc-scoville');
   const ctx = document.getElementById('sc-scoville-ctx');
@@ -1219,6 +1278,13 @@ function updateScovilleCtx() {
   const val = parseInt(inp.value) || 0;
   if (val > 0) { ctx.style.display = ''; ctx.textContent = scovilleContext(val); }
   else ctx.style.display = 'none';
+  if (!heatManualOverride) {
+    const heat = scovilleToHeat(val);
+    if (heat !== null) {
+      const slider = document.getElementById('sc-heat');
+      if (slider) { slider.value = heat; updateHeatDisplay(heat); }
+    }
+  }
 }
 
 async function saveSauce(id) {
