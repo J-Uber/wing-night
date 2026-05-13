@@ -1108,8 +1108,12 @@ function renderEvent(r) {
 // =====================================================================
 function renderCook(r) {
   const totalBW = Object.values(r.batchWings).reduce((a, b) => a + b, 0);
+  // Find the last enabled batch key to attach extra wings to
+  const lastActiveBatch = r.enabledBatches.length > 0 ? r.enabledBatches[r.enabledBatches.length - 1] : null;
   const batchCards = Object.entries(state.batches).map(([k, b]) => {
-    const wings = Math.round(r.batchWings[k] || 0);
+    const isLast = k === lastActiveBatch;
+    const extra = (isLast && r.extraWings > 0) ? r.extraWings : 0;
+    const wings = Math.round(r.batchWings[k] || 0) + extra;
     const pct = totalBW > 0 ? ((r.batchWings[k]||0) / totalBW * 100) : 0;
     const bm = r.attending.filter(m => (m.batches||[]).includes(k));
     return `
@@ -1129,8 +1133,11 @@ function renderCook(r) {
       ${b.enabled ? `
       <div class="batch-bar mb8"><div class="batch-bar-fill" style="width:${pct.toFixed(1)}%"></div></div>
       <div class="text-sm text-muted">${bm.length
-        ? bm.map(m => { const w = Math.round(r.personBatch[m.id]?.[k] || 0); return w > 0 ? `${m.name} (${w})` : null; }).filter(Boolean).join(', ') || 'No wings this batch'
-        : 'No attendees in this batch'}</div>` : ''}
+        ? [
+            ...bm.map(m => { const w = Math.round(r.personBatch[m.id]?.[k] || 0); return w > 0 ? `${m.name} (${w})` : null; }).filter(Boolean),
+            ...(extra > 0 ? [`Extra (${extra})`] : [])
+          ].join(', ') || 'No wings this batch'
+        : (extra > 0 ? `Extra (${extra})` : 'No attendees in this batch')}</div>` : ''}
     </div>`;
   }).join('');
   return `
@@ -1157,6 +1164,11 @@ function renderCook(r) {
           : '<span class="tag tag-red">No batches assigned</span>'}</div>
       </div>`;
     }).join('')}
+    ${r.extraWings > 0 && lastActiveBatch ? `
+    <div style="padding:8px 0">
+      <div class="row-sb mb8"><span class="fw5 text-muted">Extra</span><span class="text-sm text-muted">${r.extraWings} total</span></div>
+      <div class="row gap8"><span class="tag tag-muted">${state.batches[lastActiveBatch].name}: ${r.extraWings}</span></div>
+    </div>` : ''}
   </div>` : '<div class="card text-sm text-muted">Mark attendees on Tonight tab first.</div>'}`;
 }
 
