@@ -37,6 +37,23 @@ nav button:hover:not(.active){color:var(--text)}
 .sync-dot.error{background:var(--red);}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 
+/* AUTH BADGE in nav */
+.auth-badge{display:flex;align-items:center;gap:6px;margin-left:auto;flex-shrink:0;padding-left:8px;}
+.auth-name{font-size:11px;color:var(--muted);white-space:nowrap;max-width:80px;overflow:hidden;text-overflow:ellipsis;}
+.auth-role{font-size:10px;padding:2px 6px;border-radius:4px;font-weight:500;letter-spacing:.3px;}
+.auth-role.admin{background:#d4a01720;color:var(--gold);border:1px solid #d4a01740;}
+.auth-role.member{background:#4caf8218;color:var(--green);border:1px solid #4caf8233;}
+.auth-role.anon{background:#ffffff0a;color:var(--muted);border:1px solid var(--border);}
+
+/* MODAL OVERLAY */
+.modal-overlay{position:fixed;inset:0;background:#00000088;display:flex;align-items:center;justify-content:center;z-index:9000;padding:20px;}
+.modal-overlay.hidden{display:none;}
+.modal-box{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px;width:100%;max-width:360px;box-shadow:0 20px 60px #00000060;}
+.modal-title{font-size:16px;font-weight:600;margin-bottom:18px;}
+.modal-tabs{display:flex;gap:2px;margin-bottom:18px;background:var(--surface);border-radius:var(--radius);padding:3px;}
+.modal-tab{flex:1;padding:7px;border:none;background:transparent;color:var(--muted);font-family:'Inter',sans-serif;font-size:13px;font-weight:400;cursor:pointer;border-radius:6px;transition:all .15s;}
+.modal-tab.active{background:var(--card2);color:var(--text);}
+
 /* LAYOUT */
 main{padding:14px;max-width:600px;margin:0 auto;padding-bottom:44px;}
 .section-title{font-size:16px;font-weight:600;color:var(--text);margin-bottom:14px;letter-spacing:.2px;}
@@ -142,7 +159,6 @@ select option{background:var(--card)}
 .fav-btn{background:transparent;border:none;cursor:pointer;font-size:20px;padding:4px;line-height:1;transition:transform .15s;}
 .fav-btn:active{transform:scale(1.3);}
 .filter-bar{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;}
-
 .filter-chip{flex-shrink:0;padding:6px 13px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:12px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap;transition:all .15s;}
 .filter-chip.active{background:#ffffff12;color:var(--text);border-color:#ffffff28;}
 .sauce-icon{width:38px;height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;background:var(--card2);border:1px solid var(--border);}
@@ -156,9 +172,14 @@ select option{background:var(--card)}
 .loading-spinner{width:32px;height:32px;border:2px solid var(--border);border-top-color:#888;border-radius:50%;animation:spin .8s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg)}}
 .loading-text{color:var(--muted);font-size:13px;}
+
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--card2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 18px;font-size:13px;color:var(--text);z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;}
 .toast.show{opacity:1;}
 .toast.error{border-color:#e0555544;color:#e08080;}
+
+/* READ-ONLY NOTICE */
+.readonly-notice{background:#ffffff08;border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.readonly-notice span{font-size:12px;color:var(--muted);}
 </style>
 </head>
 <body>
@@ -180,6 +201,41 @@ select option{background:var(--card)}
 <!-- Toast notification -->
 <div class="toast" id="toast"></div>
 
+<!-- ================================================================
+     AUTH MODAL
+     ================================================================ -->
+<div class="modal-overlay hidden" id="authModal" onclick="handleModalOverlayClick(event)">
+  <div class="modal-box">
+    <div class="modal-title" id="authModalTitle">Sign In</div>
+
+    <!-- Tab switcher -->
+    <div class="modal-tabs" id="authTabs">
+      <button class="modal-tab active" id="tabMember" onclick="switchAuthTab('member')">Member</button>
+      <button class="modal-tab" id="tabAdmin" onclick="switchAuthTab('admin')">Admin</button>
+    </div>
+
+    <!-- Member login form -->
+    <div id="formMember">
+      <label>Username</label>
+      <input id="auth-username" type="text" autocomplete="username" placeholder="your username" class="mb10" onkeydown="if(event.key==='Enter')submitLogin()"/>
+      <label>Password</label>
+      <input id="auth-password" type="password" autocomplete="current-password" placeholder="••••••••" class="mb14" onkeydown="if(event.key==='Enter')submitLogin()"/>
+      <button class="btn btn-primary btn-full" onclick="submitLogin()" id="loginBtn">Sign In</button>
+    </div>
+
+    <!-- Admin login form -->
+    <div id="formAdmin" style="display:none">
+      <label>Email</label>
+      <input id="auth-email" type="email" autocomplete="email" placeholder="you@example.com" class="mb10" onkeydown="if(event.key==='Enter')submitAdminLogin()"/>
+      <label>Password</label>
+      <input id="auth-adminpass" type="password" autocomplete="current-password" placeholder="••••••••" class="mb14" onkeydown="if(event.key==='Enter')submitAdminLogin()"/>
+      <button class="btn btn-primary btn-full" onclick="submitAdminLogin()" id="adminLoginBtn">Sign In as Admin</button>
+    </div>
+
+    <button class="btn btn-ghost btn-full" style="margin-top:8px" onclick="closeAuthModal()">Cancel</button>
+  </div>
+</div>
+
 <nav id="nav" style="display:none">
   <span class="nav-title">Wing Night</span>
   <button class="active" onclick="showTab('dashboard')">Dashboard</button>
@@ -189,6 +245,11 @@ select option{background:var(--card)}
   <button onclick="showTab('sauces')">Sauces</button>
   <button onclick="showTab('history')">History</button>
   <button onclick="showTab('charts')">Charts</button>
+  <div class="auth-badge">
+    <span class="auth-name" id="authName">Guest</span>
+    <span class="auth-role anon" id="authRoleBadge">Viewing</span>
+    <button class="btn btn-ghost btn-sm" id="authNavBtn" onclick="handleAuthNavBtn()" style="padding:0 10px;min-height:30px;font-size:12px">Sign In</button>
+  </div>
   <div class="sync-dot synced" id="syncDot" title="Sync status"></div>
 </nav>
 <main id="app"></main>
@@ -208,6 +269,141 @@ const db = createClient(
   CREDENTIALS_SET ? SUPABASE_URL : 'https://placeholder.supabase.co',
   CREDENTIALS_SET ? SUPABASE_KEY : 'placeholder'
 );
+
+// =====================================================================
+// AUTH STATE
+// =====================================================================
+// role: 'anon' | 'member' | 'admin'
+let auth = { role: 'anon', name: 'Guest', memberId: null };
+
+function isAdmin()  { return auth.role === 'admin'; }
+function isMember() { return auth.role === 'member' || auth.role === 'admin'; }
+function isAnon()   { return auth.role === 'anon'; }
+function canEdit(memberId) {
+  if (isAdmin()) return true;
+  if (auth.role === 'member' && auth.memberId === memberId) return true;
+  return false;
+}
+
+function updateAuthUI() {
+  const nameEl  = document.getElementById('authName');
+  const roleEl  = document.getElementById('authRoleBadge');
+  const btnEl   = document.getElementById('authNavBtn');
+  if (!nameEl) return;
+  nameEl.textContent = auth.name;
+  roleEl.textContent = auth.role === 'admin' ? 'Admin' : auth.role === 'member' ? 'Member' : 'Viewing';
+  roleEl.className   = 'auth-role ' + (auth.role === 'admin' ? 'admin' : auth.role === 'member' ? 'member' : 'anon');
+  btnEl.textContent  = isAnon() ? 'Sign In' : 'Sign Out';
+}
+
+function handleAuthNavBtn() {
+  if (isAnon()) openAuthModal();
+  else signOut();
+}
+
+// =====================================================================
+// AUTH MODAL
+// =====================================================================
+let currentAuthTab = 'member';
+
+function openAuthModal() {
+  document.getElementById('authModal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('auth-username')?.focus(), 100);
+}
+function closeAuthModal() {
+  document.getElementById('authModal').classList.add('hidden');
+  document.getElementById('auth-username').value = '';
+  document.getElementById('auth-password').value = '';
+  document.getElementById('auth-email').value = '';
+  document.getElementById('auth-adminpass').value = '';
+}
+function handleModalOverlayClick(e) {
+  if (e.target === document.getElementById('authModal')) closeAuthModal();
+}
+function switchAuthTab(tab) {
+  currentAuthTab = tab;
+  document.getElementById('formMember').style.display = tab === 'member' ? '' : 'none';
+  document.getElementById('formAdmin').style.display  = tab === 'admin'  ? '' : 'none';
+  document.getElementById('tabMember').classList.toggle('active', tab === 'member');
+  document.getElementById('tabAdmin').classList.toggle('active',  tab === 'admin');
+  setTimeout(() => {
+    (tab === 'member'
+      ? document.getElementById('auth-username')
+      : document.getElementById('auth-email'))?.focus();
+  }, 50);
+}
+
+// =====================================================================
+// MEMBER LOGIN — calls Postgres function member_login()
+// =====================================================================
+async function submitLogin() {
+  const username = document.getElementById('auth-username').value.trim();
+  const password = document.getElementById('auth-password').value;
+  if (!username || !password) return toast('Enter your username and password.', true);
+
+  const btn = document.getElementById('loginBtn');
+  btn.textContent = 'Signing in…';
+  btn.disabled = true;
+
+  try {
+    const { data, error } = await db.rpc('member_login', {
+      p_username: username,
+      p_password: password
+    });
+    if (error) throw error;
+
+    auth = { role: 'member', name: data.name, memberId: data.id };
+    updateAuthUI();
+    closeAuthModal();
+    render();
+    toast(`Welcome back, ${data.name}!`);
+  } catch (err) {
+    toast(err.message || 'Invalid username or password.', true);
+  } finally {
+    btn.textContent = 'Sign In';
+    btn.disabled = false;
+  }
+}
+
+// =====================================================================
+// ADMIN LOGIN — Supabase Auth (email + password)
+// =====================================================================
+async function submitAdminLogin() {
+  const email    = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-adminpass').value;
+  if (!email || !password) return toast('Enter your email and password.', true);
+
+  const btn = document.getElementById('adminLoginBtn');
+  btn.textContent = 'Signing in…';
+  btn.disabled = true;
+
+  try {
+    const { data, error } = await db.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+
+    auth = { role: 'admin', name: data.user.email.split('@')[0], memberId: null };
+    updateAuthUI();
+    closeAuthModal();
+    render();
+    toast('Welcome, Admin!');
+  } catch (err) {
+    toast(err.message || 'Admin login failed.', true);
+  } finally {
+    btn.textContent = 'Sign In as Admin';
+    btn.disabled = false;
+  }
+}
+
+// =====================================================================
+// SIGN OUT
+// =====================================================================
+async function signOut() {
+  if (auth.role === 'admin') await db.auth.signOut();
+  auth = { role: 'anon', name: 'Guest', memberId: null };
+  updateAuthUI();
+  render();
+  toast('Signed out.');
+}
 
 // =====================================================================
 // HISTORICAL DATA — loaded once on first run if DB is empty
@@ -317,8 +513,10 @@ async function loadAll() {
       ]);
     }
 
-    // Load members
-    const { data: members } = await db.from('members').select('*').order('sort_order');
+    // Load members (never expose password_hash to client)
+    const { data: members } = await db.from('members')
+      .select('id, name, no_max, max_wings, batches, notes, attending, username, sort_order')
+      .order('sort_order');
     if (members) {
       state.members = members.map(m => ({
         id: m.id,
@@ -327,7 +525,8 @@ async function loadAll() {
         maxWings: m.max_wings,
         batches: m.batches || ['b1','b2','b3'],
         notes: m.notes || '',
-        attending: m.attending || false
+        attending: m.attending || false,
+        hasLogin: !!m.username
       }));
     }
 
@@ -389,10 +588,10 @@ async function loadAll() {
 }
 
 // =====================================================================
-// SUPABASE — SAVE SETTINGS
+// SUPABASE — SAVE SETTINGS (admin only)
 // =====================================================================
 function saveSettings() {
-  if (!CREDENTIALS_SET) return;
+  if (!CREDENTIALS_SET || !isAdmin()) return;
   clearTimeout(saveSettingsTimer);
   saveSettingsTimer = setTimeout(async () => {
     setSyncStatus('syncing');
@@ -411,6 +610,7 @@ function saveSettings() {
 
 async function saveMemberToDB(member) {
   if (!CREDENTIALS_SET) return;
+  if (!canEdit(member.id)) { toast('Not authorised.', true); return; }
   setSyncStatus('syncing');
   try {
     await db.from('members').upsert({
@@ -431,7 +631,7 @@ async function saveMemberToDB(member) {
 }
 
 async function deleteMemberFromDB(id) {
-  if (!CREDENTIALS_SET) return;
+  if (!CREDENTIALS_SET || !isAdmin()) return;
   setSyncStatus('syncing');
   try {
     await db.from('members').delete().eq('id', id);
@@ -443,7 +643,7 @@ async function deleteMemberFromDB(id) {
 }
 
 async function saveSauceToDB(sauce) {
-  if (!CREDENTIALS_SET) return;
+  if (!CREDENTIALS_SET || !isAdmin()) return;
   setSyncStatus('syncing');
   try {
     await db.from('sauces').upsert({
@@ -466,7 +666,7 @@ async function saveSauceToDB(sauce) {
 }
 
 async function deleteSauceFromDB(id) {
-  if (!CREDENTIALS_SET) return;
+  if (!CREDENTIALS_SET || !isAdmin()) return;
   setSyncStatus('syncing');
   try {
     await db.from('sauces').delete().eq('id', id);
@@ -479,6 +679,7 @@ async function deleteSauceFromDB(id) {
 
 async function saveHistoryEntry(entry) {
   if (!CREDENTIALS_SET) { toast('Database not connected — entry not saved.', true); return null; }
+  if (!isAdmin()) { toast('Only admin can log events.', true); return null; }
   setSyncStatus('syncing');
   try {
     const { data } = await db.from('history').insert({
@@ -505,7 +706,7 @@ async function saveHistoryEntry(entry) {
 }
 
 async function deleteHistoryFromDB(id) {
-  if (!CREDENTIALS_SET) return;
+  if (!CREDENTIALS_SET || !isAdmin()) return;
   setSyncStatus('syncing');
   try {
     await db.from('history').delete().eq('id', id);
@@ -564,9 +765,7 @@ function calc() {
 
   const enabledBatches = Object.entries(state.batches).filter(([k, b]) => b.enabled).map(([k]) => k);
 
-  // Balance batch wings: assign each person to their earliest batch first,
-  // then forward-pass excess to later batches to equalise totals.
-  let personBatch = {}; // personBatch[memberId][batchKey] = wings
+  let personBatch = {};
   let batchWings = {};
   for (let bk of enabledBatches) batchWings[bk] = 0;
   for (let m of attending) personBatch[m.id] = Object.fromEntries(enabledBatches.map(b => [b, 0]));
@@ -669,27 +868,41 @@ function scovilleContext(n) {
 }
 
 // =====================================================================
+// READ-ONLY NOTICE (shown to anon / member on restricted tabs)
+// =====================================================================
+function readonlyNotice(message) {
+  return `<div class="readonly-notice">
+    <span>👁 ${message}</span>
+    <button class="btn btn-ghost btn-sm" onclick="openAuthModal()">Sign In</button>
+  </div>`;
+}
+
+// =====================================================================
 // DASHBOARD
 // =====================================================================
 function renderDashboard(r) {
   const c = state.costs;
   let packRows = '';
-  for (let i = 0; i < c.numPacks; i++) {
-    packRows += `<div class="row mb10">
-      <div class="flex1"><label>Pack ${i+1} Price ($)</label>
-      <input type="number" inputmode="decimal" step="0.01" value="${(c.packPrices[i]||0).toFixed(2)}"
-        onchange="updatePackPrice(${i}, this.value)"/></div>
-      ${c.numPacks > 1 ? `<button class="btn btn-danger btn-sm" style="margin-top:18px" onclick="removePack(${i})">Remove</button>` : ''}
-    </div>`;
+  if (isAdmin()) {
+    for (let i = 0; i < c.numPacks; i++) {
+      packRows += `<div class="row mb10">
+        <div class="flex1"><label>Pack ${i+1} Price ($)</label>
+        <input type="number" inputmode="decimal" step="0.01" value="${(c.packPrices[i]||0).toFixed(2)}"
+          onchange="updatePackPrice(${i}, this.value)"/></div>
+        ${c.numPacks > 1 ? `<button class="btn btn-danger btn-sm" style="margin-top:18px" onclick="removePack(${i})">Remove</button>` : ''}
+      </div>`;
+    }
   }
   return `
   <div class="section-title">Cost Dashboard</div>
+  ${!isAdmin() ? readonlyNotice('Cost settings are read-only. Sign in as admin to edit.') : ''}
   <div class="grid4 mb14">
     <div class="metric"><div class="metric-label">Total Wings</div><div class="metric-val">${r.totalWings}</div></div>
     <div class="metric"><div class="metric-label">Total Cost</div><div class="metric-val">$${r.totalCost.toFixed(2)}</div></div>
     <div class="metric"><div class="metric-label">$/Wing</div><div class="metric-val">$${r.baseCostPerWing.toFixed(3)}</div></div>
     <div class="metric"><div class="metric-label">Avg Pack</div><div class="metric-val">$${r.avgPackCost.toFixed(2)}</div></div>
   </div>
+  ${isAdmin() ? `
   <div class="card mb10">
     <div class="row-sb mb12"><span class="fw6">Wing Packs</span>
       <button class="btn btn-ghost btn-sm" onclick="addPack()">+ Add Pack</button></div>
@@ -710,12 +923,18 @@ function renderDashboard(r) {
     <div class="stat-row"><span class="text-sm text-muted">Extras</span><span>$${r.extraCosts.toFixed(2)}</span></div>
     <div class="stat-row"><span class="text-sm text-muted">Wings</span><span>$${r.totalWingCost.toFixed(2)}</span></div>
     <div class="stat-row" style="border:none"><span class="fw6">Grand Total</span><span class="fw6" style="font-size:17px">$${r.totalCost.toFixed(2)}</span></div>
-  </div>
+  </div>` : `
+  <div class="card mb10">
+    <div class="fw6 mb10">Cost Summary</div>
+    <div class="stat-row"><span class="text-sm text-muted">Wings</span><span>$${r.totalWingCost.toFixed(2)}</span></div>
+    <div class="stat-row"><span class="text-sm text-muted">Extras (oil, sauce, milk)</span><span>$${r.extraCosts.toFixed(2)}</span></div>
+    <div class="stat-row" style="border:none"><span class="fw6">Grand Total</span><span class="fw6" style="font-size:17px">$${r.totalCost.toFixed(2)}</span></div>
+  </div>`}
   ${r.n > 0 ? `
   <div class="card">
     <div class="row-sb mb12">
       <span class="fw6">${r.n} Attending Tonight</span>
-      <button class="btn btn-success btn-sm" onclick="logEvent()">Save to History</button>
+      ${isAdmin() ? `<button class="btn btn-success btn-sm" onclick="logEvent()">Save to History</button>` : ''}
     </div>
     <div class="grid4">
       <div class="metric"><div class="metric-label">Wings Out</div><div class="metric-val">${r.totalDistributed}</div></div>
@@ -726,7 +945,7 @@ function renderDashboard(r) {
   </div>` : `
   <div class="card row-sb">
     <span class="text-sm text-muted">Mark attendees on Tonight tab to see summary.</span>
-    <button class="btn btn-success btn-sm" onclick="logEvent()">Save to History</button>
+    ${isAdmin() ? `<button class="btn btn-success btn-sm" onclick="logEvent()">Save to History</button>` : ''}
   </div>`}`;
 }
 
@@ -735,9 +954,17 @@ function renderDashboard(r) {
 // =====================================================================
 function renderProfiles(r) {
   const em = state.editingMember;
+
+  // Only admin or the matching member can open an edit form
+  // Non-admin members can only edit their own profile
   let formHtml = '';
   if (em !== null) {
     const isNew = em === 'new';
+    // Gate: non-admins can't create new profiles or edit others'
+    if (!isAdmin() && (isNew || em !== auth.memberId)) {
+      state.editingMember = null;
+      return renderProfiles(r);
+    }
     const m = isNew
       ? {id:'',name:'',noMax:true,maxWings:20,batches:['b1','b2','b3'],notes:'',attending:false}
       : state.members.find(x => x.id === em) || {};
@@ -745,7 +972,8 @@ function renderProfiles(r) {
     <div class="card" style="border-color:#ffffff22;margin-bottom:14px">
       <div class="fw6 mb14">${isNew ? 'New Profile' : 'Edit Profile'}</div>
       <label>Name</label>
-      <input id="pf-name" value="${m.name||''}" placeholder="Family member name" class="mb10"/>
+      <input id="pf-name" value="${m.name||''}" placeholder="Family member name" class="mb10"
+        ${!isAdmin() ? 'readonly style="opacity:.6"' : ''}/>
       <div class="row-sb mb10" style="padding:10px 12px;background:var(--card2);border:1px solid var(--border);border-radius:var(--radius);">
         <span style="font-size:14px;color:var(--text)">No Maximum Wings</span>
         <label class="toggle">
@@ -773,33 +1001,45 @@ function renderProfiles(r) {
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-primary flex1" onclick="saveMember('${em}')">Save Profile</button>
         <button class="btn btn-ghost" onclick="cancelEdit()">Cancel</button>
-        ${!isNew ? `<button class="btn btn-danger" onclick="deleteMember('${em}')">Delete</button>` : ''}
+        ${!isNew && isAdmin() ? `<button class="btn btn-danger" onclick="deleteMember('${em}')">Delete</button>` : ''}
       </div>
     </div>`;
   }
-  const cards = state.members.map(m => `
+
+  const cards = state.members.map(m => {
+    const canEditThis = canEdit(m.id);
+    return `
     <div class="member-card ${m.attending ? 'attending' : ''}">
       <div class="row-sb">
         <div class="row gap8">
+          ${isMember() ? `
           <label class="toggle">
-            <input type="checkbox" ${m.attending ? 'checked' : ''} onchange="toggleAttend('${m.id}', this.checked)">
+            <input type="checkbox" ${m.attending ? 'checked' : ''}
+              ${canEditThis ? `onchange="toggleAttend('${m.id}', this.checked)"` : 'disabled style="opacity:.4"'}>
             <span class="toggle-slider"></span>
-          </label>
+          </label>` : `
+          <label class="toggle">
+            <input type="checkbox" ${m.attending ? 'checked' : ''} disabled style="opacity:.4">
+            <span class="toggle-slider"></span>
+          </label>`}
           <div class="member-avatar">${m.name.substring(0,2).toUpperCase()}</div>
           <div>
-            <div class="fw5" style="font-size:15px">${m.name}</div>
+            <div class="fw5" style="font-size:15px">${m.name}${m.hasLogin ? ' <span class="tag tag-green" style="font-size:10px;padding:1px 6px">has login</span>' : ''}</div>
             <div class="text-sm text-muted">${m.noMax ? 'No max' : 'Max ' + m.maxWings + ' wings'} &middot;
               ${(m.batches||[]).filter(b => state.batches[b]).map(b => state.batches[b].name).join(', ') || 'No batches'}</div>
             ${m.notes ? `<div class="text-sm text-muted" style="margin-top:3px;font-style:italic">${m.notes}</div>` : ''}
           </div>
         </div>
-        <button class="btn btn-ghost btn-sm" onclick="editMember('${m.id}')">Edit</button>
+        ${canEditThis ? `<button class="btn btn-ghost btn-sm" onclick="editMember('${m.id}')">Edit</button>` : ''}
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
+
   return `
   <div class="section-title">Family Profiles</div>
+  ${isAnon() ? readonlyNotice('Sign in to mark yourself as attending or edit your profile.') : ''}
   ${formHtml}
-  ${em === null ? `<button class="btn btn-primary btn-full mb14" onclick="newMember()">+ Add Family Member</button>` : ''}
+  ${isAdmin() && em === null ? `<button class="btn btn-primary btn-full mb14" onclick="newMember()">+ Add Family Member</button>` : ''}
   ${state.members.length === 0 && em === null ? '<div class="text-sm text-muted">No profiles yet.</div>' : cards}`;
 }
 
@@ -810,12 +1050,14 @@ function renderEvent(r) {
   const rows = state.members.map(m => {
     const wings = r.wingAllotments[m.id] || 0;
     const contrib = r.contributions[m.id] || 0;
+    const canToggle = canEdit(m.id);
     return `
     <div class="member-card ${m.attending ? 'attending' : ''}">
       <div class="row-sb">
         <div class="row gap8">
           <label class="toggle">
-            <input type="checkbox" ${m.attending ? 'checked' : ''} onchange="toggleAttend('${m.id}', this.checked)">
+            <input type="checkbox" ${m.attending ? 'checked' : ''}
+              ${canToggle ? `onchange="toggleAttend('${m.id}', this.checked)"` : 'disabled style="opacity:.4"'}>
             <span class="toggle-slider"></span>
           </label>
           <div class="member-avatar">${m.name.substring(0,2).toUpperCase()}</div>
@@ -835,6 +1077,7 @@ function renderEvent(r) {
   }).join('');
   return `
   <div class="section-title">Tonight</div>
+  ${isAnon() ? readonlyNotice('Sign in to mark your attendance.') : ''}
   ${r.n > 0 ? `
   <div class="grid4 mb14">
     <div class="metric"><div class="metric-label">Attending</div><div class="metric-val">${r.n}</div></div>
@@ -874,7 +1117,8 @@ function renderCook(r) {
       <div class="row-sb mb8">
         <div class="row gap8">
           <label class="toggle">
-            <input type="checkbox" ${b.enabled ? 'checked' : ''} onchange="toggleBatch('${k}', this.checked)">
+            <input type="checkbox" ${b.enabled ? 'checked' : ''}
+              ${isAdmin() ? `onchange="toggleBatch('${k}', this.checked)"` : 'disabled style="opacity:.4"'}>
             <span class="toggle-slider"></span>
           </label>
           <span class="fw5" style="${!b.enabled ? 'color:var(--muted)' : ''}">${b.name}</span>
@@ -922,7 +1166,7 @@ function renderCook(r) {
 function renderSauces() {
   const es = state.editingSauce;
   let formHtml = '';
-  if (es !== null) {
+  if (es !== null && isAdmin()) {
     const isNew = es === 'new';
     const s = isNew
       ? {id:'',name:'',brand:'',flavorProfile:'',heat:5,scoville:'',glutenFree:false,notes:'',favorite:false,outOfStock:false}
@@ -948,24 +1192,15 @@ function renderSauces() {
       <div id="sc-scoville-ctx" class="text-sm text-muted mb10" style="${s.scoville?'':'display:none'}">${scovilleContext(parseInt(s.scoville)||0)}</div>
       <div class="row-sb mb10" style="padding:10px 12px;background:var(--card2);border:1px solid var(--border);border-radius:var(--radius);">
         <span style="font-size:14px;color:var(--text)">Gluten Free</span>
-        <label class="toggle">
-          <input type="checkbox" id="sc-gf" ${s.glutenFree ? 'checked' : ''}>
-          <span class="toggle-slider"></span>
-        </label>
+        <label class="toggle"><input type="checkbox" id="sc-gf" ${s.glutenFree ? 'checked' : ''}><span class="toggle-slider"></span></label>
       </div>
       <div class="row-sb mb10" style="padding:10px 12px;background:var(--card2);border:1px solid var(--border);border-radius:var(--radius);">
         <span style="font-size:14px;color:var(--text)">⭐ Favorite</span>
-        <label class="toggle">
-          <input type="checkbox" id="sc-fav" ${s.favorite ? 'checked' : ''}>
-          <span class="toggle-slider"></span>
-        </label>
+        <label class="toggle"><input type="checkbox" id="sc-fav" ${s.favorite ? 'checked' : ''}><span class="toggle-slider"></span></label>
       </div>
       <div class="row-sb mb10" style="padding:10px 12px;background:var(--card2);border:1px solid var(--border);border-radius:var(--radius);">
         <span style="font-size:14px;color:var(--text)">🚫 Out of Stock</span>
-        <label class="toggle">
-          <input type="checkbox" id="sc-oos" ${s.outOfStock ? 'checked' : ''}>
-          <span class="toggle-slider"></span>
-        </label>
+        <label class="toggle"><input type="checkbox" id="sc-oos" ${s.outOfStock ? 'checked' : ''}><span class="toggle-slider"></span></label>
       </div>
       <label>Notes</label>
       <textarea id="sc-notes" placeholder="Tasting notes, where to buy, who loves it..." class="mb10">${s.notes||''}</textarea>
@@ -1016,8 +1251,8 @@ function renderSauces() {
           </div>
         </div>
         <div class="row" style="gap:4px;flex-shrink:0">
-          <button class="fav-btn" onclick="toggleFavSauce('${s.id}')">${s.favorite ? '⭐' : '☆'}</button>
-          <button class="btn btn-ghost btn-sm" onclick="editSauce('${s.id}')">Edit</button>
+          ${isAdmin() ? `<button class="fav-btn" onclick="toggleFavSauce('${s.id}')">${s.favorite ? '⭐' : '☆'}</button>` : (s.favorite ? '<span style="padding:4px">⭐</span>' : '')}
+          ${isAdmin() ? `<button class="btn btn-ghost btn-sm" onclick="editSauce('${s.id}')">Edit</button>` : ''}
         </div>
       </div>
       <div class="heat-bar mb8">${pips}</div>
@@ -1040,7 +1275,7 @@ function renderSauces() {
 
   return `
   <div class="section-title">Sauce Vault</div>
-  ${es === null ? `<button class="btn btn-primary btn-full mb10" onclick="newSauce()">+ Add Sauce</button>` : ''}
+  ${isAdmin() && es === null ? `<button class="btn btn-primary btn-full mb10" onclick="newSauce()">+ Add Sauce</button>` : ''}
   ${formHtml}
   ${total > 0 && es === null ? `
   <div class="grid2-auto mb10">
@@ -1070,7 +1305,7 @@ function renderSauces() {
     ? `<div class="empty-state"><div>🌶️</div><div style="font-size:14px">No sauces match this filter.</div></div>`
     : cards}
   ` : es === null ? `<div class="empty-state"><div>🫙</div><div style="font-size:15px;margin-bottom:6px">No sauces yet.</div>
-    <div class="text-sm text-muted">Start building your sauce vault above.</div></div>` : ''}`;
+    ${isAdmin() ? '<div class="text-sm text-muted">Start building your sauce vault above.</div>' : '<div class="text-sm text-muted">No sauces added yet.</div>'}</div>` : ''}`;
 }
 
 // =====================================================================
@@ -1092,7 +1327,7 @@ function renderHistory() {
         <div class="fw5">$${e.totalCost.toFixed(2)}</div>
         <div class="text-sm text-muted">$${e.costPerWing.toFixed(3)}/wing</div>
       </div>
-      <button class="btn btn-danger btn-sm" style="flex-shrink:0" onclick="deleteHistoryEntry('${e.id}')">✕</button>
+      ${isAdmin() ? `<button class="btn btn-danger btn-sm" style="flex-shrink:0" onclick="deleteHistoryEntry('${e.id}')">✕</button>` : '<div style="width:36px"></div>'}
     </div>`).join('')}
   </div>
   <div class="text-sm text-muted" style="margin-top:6px">${state.history.length} nights recorded</div>`;
@@ -1171,25 +1406,29 @@ function drawChart() {
 }
 
 // =====================================================================
-// ACTIONS — COSTS
+// ACTIONS — COSTS (admin only)
 // =====================================================================
 function updateCost(k, v) {
+  if (!isAdmin()) return;
   state.costs[k] = parseFloat(v) || 0;
   render();
   saveSettings();
 }
 function updatePackPrice(i, v) {
+  if (!isAdmin()) return;
   state.costs.packPrices[i] = parseFloat(v) || 0;
   render();
   saveSettings();
 }
 function addPack() {
+  if (!isAdmin()) return;
   state.costs.numPacks++;
   state.costs.packPrices.push(0);
   render();
   saveSettings();
 }
 function removePack(i) {
+  if (!isAdmin()) return;
   state.costs.numPacks--;
   state.costs.packPrices.splice(i, 1);
   render();
@@ -1199,12 +1438,14 @@ function removePack(i) {
 // =====================================================================
 // ACTIONS — MEMBERS
 // =====================================================================
-function newMember()        { state.editingMember = 'new'; render(); }
-function editMember(id)     { state.editingMember = id; render(); }
+function newMember()        { if (!isAdmin()) return; state.editingMember = 'new'; render(); }
+function editMember(id)     { if (!canEdit(id)) return; state.editingMember = id; render(); }
 function cancelEdit()       { state.editingMember = null; render(); }
 function toggleNoMax(c)     { const w = document.getElementById('pf-maxwrap'); if (w) w.style.display = c ? 'none' : ''; }
 
 async function saveMember(id) {
+  if (!canEdit(id === 'new' ? null : id) && id !== 'new') return toast('Not authorised.', true);
+  if (id === 'new' && !isAdmin()) return toast('Not authorised.', true);
   const name = document.getElementById('pf-name').value.trim();
   if (!name) return toast('Please enter a name.', true);
   const noMax = document.getElementById('pf-nomax').checked;
@@ -1217,7 +1458,14 @@ async function saveMember(id) {
     state.members.push(member);
   } else {
     const idx = state.members.findIndex(m => m.id === id);
-    if (idx >= 0) { state.members[idx] = {...state.members[idx], name, noMax, maxWings, batches, notes}; member = state.members[idx]; }
+    if (idx >= 0) {
+      // Members can only change notes, noMax, maxWings, batches — not name
+      const updates = isAdmin()
+        ? { name, noMax, maxWings, batches, notes }
+        : { noMax, maxWings, batches, notes };
+      state.members[idx] = {...state.members[idx], ...updates};
+      member = state.members[idx];
+    }
   }
   state.editingMember = null;
   render();
@@ -1226,6 +1474,7 @@ async function saveMember(id) {
 }
 
 async function deleteMember(id) {
+  if (!isAdmin()) return toast('Only admin can delete profiles.', true);
   if (!confirm('Delete this profile?')) return;
   state.members = state.members.filter(m => m.id !== id);
   state.editingMember = null;
@@ -1235,6 +1484,7 @@ async function deleteMember(id) {
 }
 
 async function toggleAttend(id, val) {
+  if (!canEdit(id)) { toast('You can only update your own attendance.', true); return; }
   const m = state.members.find(x => x.id === id);
   if (!m) return;
   m.attending = val;
@@ -1243,16 +1493,17 @@ async function toggleAttend(id, val) {
 }
 
 async function toggleBatch(k, val) {
+  if (!isAdmin()) return;
   state.batches[k].enabled = val;
   render();
   saveSettings();
 }
 
 // =====================================================================
-// ACTIONS — SAUCES
+// ACTIONS — SAUCES (admin only)
 // =====================================================================
-function newSauce()          { state.editingSauce = 'new'; heatManualOverride = false; render(); }
-function editSauce(id)       { state.editingSauce = id; heatManualOverride = false; render(); }
+function newSauce()          { if (!isAdmin()) return; state.editingSauce = 'new'; heatManualOverride = false; render(); }
+function editSauce(id)       { if (!isAdmin()) return; state.editingSauce = id; heatManualOverride = false; render(); }
 function cancelSauceEdit()   { state.editingSauce = null; render(); }
 function setSauceFilter(f)   { state.sauceFilter = f; render(); }
 
@@ -1303,6 +1554,7 @@ function updateScovilleCtx() {
 }
 
 async function saveSauce(id) {
+  if (!isAdmin()) return toast('Only admin can edit sauces.', true);
   const name = document.getElementById('sc-name').value.trim();
   if (!name) return toast('Please enter a sauce name.', true);
   const brand = document.getElementById('sc-brand').value.trim();
@@ -1328,6 +1580,7 @@ async function saveSauce(id) {
 }
 
 async function deleteSauce(id) {
+  if (!isAdmin()) return toast('Only admin can delete sauces.', true);
   if (!confirm('Delete this sauce?')) return;
   state.sauces = state.sauces.filter(s => s.id !== id);
   state.editingSauce = null;
@@ -1337,6 +1590,7 @@ async function deleteSauce(id) {
 }
 
 async function toggleFavSauce(id) {
+  if (!isAdmin()) return;
   const s = state.sauces.find(x => x.id === id);
   if (!s) return;
   s.favorite = !s.favorite;
@@ -1345,9 +1599,10 @@ async function toggleFavSauce(id) {
 }
 
 // =====================================================================
-// ACTIONS — HISTORY
+// ACTIONS — HISTORY (admin only)
 // =====================================================================
 async function logEvent() {
+  if (!isAdmin()) return toast('Only admin can log events.', true);
   const r = calc();
   const today = new Date();
   const dateStr = `${today.getMonth()+1}/${today.getDate()}/${String(today.getFullYear()).slice(2)}`;
@@ -1380,6 +1635,7 @@ async function logEvent() {
 }
 
 async function deleteHistoryEntry(id) {
+  if (!isAdmin()) return toast('Only admin can delete history.', true);
   if (!confirm('Delete this entry?')) return;
   state.history = state.history.filter(h => h.id !== id);
   render();
@@ -1391,9 +1647,16 @@ async function deleteHistoryEntry(id) {
 // INIT
 // =====================================================================
 async function init() {
+  // Restore Supabase auth session if admin was previously logged in
+  const { data: { session } } = await db.auth.getSession();
+  if (session?.user) {
+    auth = { role: 'admin', name: session.user.email.split('@')[0], memberId: null };
+  }
+
   await loadAll();
   document.getElementById('loadingScreen').style.display = 'none';
   document.getElementById('nav').style.display = 'flex';
+  updateAuthUI();
   render();
 }
 
