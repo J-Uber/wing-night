@@ -240,7 +240,7 @@ select option{background:var(--card)}
   <span class="nav-title">Wing Night</span>
   <button class="active" onclick="showTab('dashboard')">Dashboard</button>
   <button onclick="showTab('profiles')">Family</button>
-  <button onclick="showTab('event')">Tonight</button>
+  <button id="eventTabBtn" onclick="showTab('event')">Tonight</button>
   <button onclick="showTab('cook')">Cook</button>
   <button onclick="showTab('sauces')">Sauces</button>
   <button onclick="showTab('history')">History</button>
@@ -443,7 +443,8 @@ const HISTORICAL = [
 
 const DEFAULT_SETTINGS = {
   costs: {numPacks:2, packPrices:[26.23,25.05], totalWings:156, oilCost:15, sauceCost:15, milkCost:2.98},
-  batches: {b1:{enabled:true,name:'Batch 1'}, b2:{enabled:true,name:'Batch 2'}, b3:{enabled:false,name:'Batch 3'}}
+  batches: {b1:{enabled:true,name:'Batch 1'}, b2:{enabled:true,name:'Batch 2'}, b3:{enabled:false,name:'Batch 3'}},
+  event: {date:'', rsvpDeadline:''}
 };
 
 // =====================================================================
@@ -452,6 +453,7 @@ const DEFAULT_SETTINGS = {
 let state = {
   costs: {...DEFAULT_SETTINGS.costs},
   batches: {...DEFAULT_SETTINGS.batches},
+  event: {...DEFAULT_SETTINGS.event},
   members: [],
   editingMember: null,
   activeTab: 'dashboard',
@@ -505,17 +507,19 @@ async function loadAll() {
       settingsRows.forEach(row => {
         if (row.key === 'costs') state.costs = row.value;
         if (row.key === 'batches') state.batches = row.value;
+        if (row.key === 'event') state.event = row.value;
       });
     } else {
       await db.from('settings').upsert([
         { key: 'costs', value: DEFAULT_SETTINGS.costs },
-        { key: 'batches', value: DEFAULT_SETTINGS.batches }
+        { key: 'batches', value: DEFAULT_SETTINGS.batches },
+        { key: 'event', value: DEFAULT_SETTINGS.event }
       ]);
     }
 
     // Load members (never expose password_hash to client)
     const { data: members } = await db.from('members')
-      .select('id, name, no_max, max_wings, batches, notes, attending, username, sort_order')
+      .select('id, name, no_max, max_wings, batches, notes, attending, username, sort_order, rsvp, eta, rsvp_comment')
       .order('sort_order');
     if (members) {
       state.members = members.map(m => ({
@@ -526,7 +530,10 @@ async function loadAll() {
         batches: m.batches || ['b1','b2','b3'],
         notes: m.notes || '',
         attending: m.attending || false,
-        hasLogin: !!m.username
+        hasLogin: !!m.username,
+        rsvp: m.rsvp || null,
+        eta: m.eta || '',
+        rsvpComment: m.rsvp_comment || ''
       }));
     }
 
@@ -598,7 +605,8 @@ function saveSettings() {
     try {
       await db.from('settings').upsert([
         { key: 'costs', value: state.costs },
-        { key: 'batches', value: state.batches }
+        { key: 'batches', value: state.batches },
+        { key: 'event', value: state.event }
       ]);
       setSyncStatus('synced');
     } catch (err) {
@@ -621,7 +629,10 @@ async function saveMemberToDB(member) {
       batches: member.batches,
       notes: member.notes,
       attending: member.attending,
-      sort_order: state.members.findIndex(m => m.id === member.id)
+      sort_order: state.members.findIndex(m => m.id === member.id),
+      rsvp: member.rsvp || null,
+      eta: member.eta || null,
+      rsvp_comment: member.rsvpComment || null
     });
     setSyncStatus('synced');
   } catch (err) {
@@ -728,7 +739,7 @@ function calc() {
   const avgPackCost = c.numPacks > 0 ? totalWingCost / c.numPacks : 0;
   const extraCosts = (parseFloat(c.oilCost)||0) + (parseFloat(c.sauceCost)||0) + (parseFloat(c.milkCost)||0);
   const totalCost = totalWingCost + extraCosts;
-  const attending = state.members.filter(m => m.attending);
+  const attending = state.members.filter(m => m.rsvp === 'yes' || (m.rsvp === null && m.attending));
   const n = attending.length;
 
   let wingAllotments = {}, leftoverWings = totalWings;
@@ -810,6 +821,21 @@ function calc() {
 // =====================================================================
 // NAV
 // =====================================================================
+function eventTabLabel() {
+  const d = state.event && state.event.date;
+  if (!d) return 'Tonight';
+  // Format date nicely: parse YYYY-MM-DD as local date
+  const [y, mo, day] = d.split('-').map(Number);
+  if (!y || !mo || !day) return d;
+  const dt = new Date(y, mo - 1, day);
+  return dt.toLocaleDateString('en-US', {month:'short', day:'numeric'});
+}
+
+function updateEventTabLabel() {
+  const btn = document.getElementById('eventTabBtn');
+  if (btn) btn.textContent = eventTabLabel();
+}
+
 function showTab(tab) {
   state.activeTab = tab;
   document.querySelectorAll('nav button').forEach((b, i) => {
@@ -819,6 +845,7 @@ function showTab(tab) {
 }
 
 function render() {
+  updateEventTabLabel();
   const app = document.getElementById('app');
   const r = calc();
   switch (state.activeTab) {
@@ -1044,49 +1071,83 @@ function renderProfiles(r) {
 }
 
 // =====================================================================
-// EVENT NIGHT
+// EVENT NIGHT / RSVP
 // =====================================================================
 function renderEvent(r) {
-  const rows = state.members.map(m => {
-    const wings = r.wingAllotments[m.id] || 0;
-    const contrib = r.contributions[m.id] || 0;
-    const canToggle = canEdit(m.id);
-    return `
-    <div class="member-card ${m.attending ? 'attending' : ''}">
-      <div class="row-sb">
-        <div class="row gap8">
-          <label class="toggle">
-            <input type="checkbox" ${m.attending ? 'checked' : ''}
-              ${canToggle ? `onchange="toggleAttend('${m.id}', this.checked)"` : 'disabled style="opacity:.4"'}>
-            <span class="toggle-slider"></span>
-          </label>
-          <div class="member-avatar">${m.name.substring(0,2).toUpperCase()}</div>
-          <div>
-            <div class="fw5" style="font-size:15px">${m.name}</div>
-            <div class="text-sm text-muted">${m.noMax ? 'No max' : 'Max ' + m.maxWings}</div>
-          </div>
+  const ev = state.event || {};
+  const now = new Date();
+
+  // Deadline logic
+  let deadlineHtml = '';
+  if (ev.rsvpDeadline) {
+    const [dy, dm, dd] = ev.rsvpDeadline.split('-').map(Number);
+    const dl = new Date(dy, dm - 1, dd, 23, 59, 59);
+    const isPast = now > dl;
+    deadlineHtml = `<span class="tag ${isPast ? 'tag-red' : 'tag-muted'}" style="font-size:11px">
+      RSVP by ${dl.toLocaleDateString('en-US',{month:'short',day:'numeric'})}${isPast ? ' — closed' : ''}
+    </span>`;
+  }
+
+  // Event date display
+  let eventDateHtml = '';
+  if (ev.date) {
+    const [ey, em2, ed] = ev.date.split('-').map(Number);
+    const edt = new Date(ey, em2 - 1, ed);
+    const isToday = edt.toDateString() === now.toDateString();
+    const diff = Math.round((edt - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000);
+    let badge = '';
+    if (isToday) badge = '<span class="tag tag-green" style="font-size:11px">Tonight!</span>';
+    else if (diff === 1) badge = '<span class="tag tag-primary" style="font-size:11px">Tomorrow</span>';
+    else if (diff > 1) badge = `<span class="tag tag-muted" style="font-size:11px">In ${diff} days</span>`;
+    else if (diff < 0) badge = `<span class="tag tag-muted" style="font-size:11px">${Math.abs(diff)}d ago</span>`;
+    eventDateHtml = `<div class="row gap8 mb10" style="flex-wrap:wrap">
+      <span class="fw5">${edt.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}</span>
+      ${badge} ${deadlineHtml}
+    </div>`;
+  } else {
+    eventDateHtml = `<div class="text-sm text-muted mb10">No event date set.${isAdmin() ? ' Set one below.' : ''}</div>`;
+  }
+
+  // Admin event settings card
+  let adminSettingsHtml = '';
+  if (isAdmin()) {
+    adminSettingsHtml = `
+    <div class="card mb10">
+      <div class="fw6 mb12">Event Settings</div>
+      <div class="grid2 mb10">
+        <div>
+          <label>Event Date</label>
+          <input type="date" id="ev-date" value="${ev.date||''}" onchange="updateEventSetting('date', this.value)"/>
         </div>
-        <div style="text-align:right;flex-shrink:0">
-          ${m.attending
-            ? `<div class="fw5" style="font-size:16px">${wings} wings</div><div class="text-sm text-muted">$${contrib.toFixed(2)}</div>`
-            : '<span class="tag tag-muted">Absent</span>'}
+        <div>
+          <label>RSVP Deadline</label>
+          <input type="date" id="ev-deadline" value="${ev.rsvpDeadline||''}" onchange="updateEventSetting('rsvpDeadline', this.value)"/>
         </div>
       </div>
-      ${m.attending && m.notes ? `<div class="text-sm text-muted" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-style:italic">${m.notes}</div>` : ''}
+      <div class="row gap8" style="flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" onclick="resetRsvps()">🔄 Reset All RSVPs</button>
+      </div>
     </div>`;
-  }).join('');
-  return `
-  <div class="section-title">Tonight</div>
-  ${isAnon() ? readonlyNotice('Sign in to mark your attendance.') : ''}
-  ${r.n > 0 ? `
-  <div class="grid4 mb14">
-    <div class="metric"><div class="metric-label">Attending</div><div class="metric-val">${r.n}</div></div>
-    <div class="metric"><div class="metric-label">Wings Out</div><div class="metric-val">${r.totalDistributed}</div></div>
-    <div class="metric"><div class="metric-label">Extra</div><div class="metric-val">${r.extraWings}</div></div>
-    <div class="metric"><div class="metric-label">Total</div><div class="metric-val">$${r.totalCost.toFixed(2)}</div></div>
-  </div>
+  }
+
+  // RSVP summary counts
+  const yesCount    = state.members.filter(m => m.rsvp === 'yes').length;
+  const noCount     = state.members.filter(m => m.rsvp === 'no').length;
+  const maybeCount  = state.members.filter(m => m.rsvp === 'maybe').length;
+  const pendingCount= state.members.filter(m => !m.rsvp).length;
+
+  const summaryHtml = state.members.length > 0 ? `
+  <div class="grid4 mb10">
+    <div class="metric"><div class="metric-label">✅ Yes</div><div class="metric-val text-green">${yesCount}</div></div>
+    <div class="metric"><div class="metric-label">❌ No</div><div class="metric-val text-red">${noCount}</div></div>
+    <div class="metric"><div class="metric-label">🤔 Maybe</div><div class="metric-val text-gold">${maybeCount}</div></div>
+    <div class="metric"><div class="metric-label">⏳ Pending</div><div class="metric-val text-muted">${pendingCount}</div></div>
+  </div>` : '';
+
+  // Wings & cost summary (only if yesCount > 0)
+  const costSummaryHtml = r.n > 0 ? `
   <div class="card mb10">
-    <div class="fw6 mb10">Contributions</div>
+    <div class="fw6 mb10">Contributions (${r.n} attending)</div>
     ${r.attending.map(m => `
     <div class="stat-row">
       <span>${m.name}</span>
@@ -1099,8 +1160,69 @@ function renderEvent(r) {
       <span class="text-sm text-muted">Total Collected</span>
       <span class="fw6">$${Object.values(r.contributions).reduce((a,b)=>a+b,0).toFixed(2)}</span>
     </div>
-  </div>` : '<div class="card text-sm text-muted mb10">Toggle attendees below to get started.</div>'}
-  ${state.members.length === 0 ? '<div class="text-sm text-muted">Add profiles on the Family tab first.</div>' : rows}`;
+  </div>` : '';
+
+  // RSVP member cards
+  const rsvpCards = state.members.map(m => {
+    const rsvp = m.rsvp || null;
+    const statusColor = rsvp === 'yes' ? 'var(--green)' : rsvp === 'no' ? 'var(--red)' : rsvp === 'maybe' ? 'var(--gold)' : 'var(--muted)';
+    const statusLabel = rsvp === 'yes' ? '✅ Attending' : rsvp === 'no' ? '❌ Not coming' : rsvp === 'maybe' ? '🤔 Maybe' : '⏳ Pending';
+    const borderStyle = rsvp === 'yes' ? 'border-color:#ffffff28' : rsvp === 'maybe' ? 'border-color:#d4a01730' : '';
+
+    const rsvpBtns = `
+    <div class="row gap8 mb10" style="flex-wrap:wrap">
+      <button class="btn btn-sm ${rsvp==='yes' ? 'btn-success' : 'btn-ghost'}" onclick="setRsvp('${m.id}','yes')">✅ Yes</button>
+      <button class="btn btn-sm ${rsvp==='maybe' ? '' : 'btn-ghost'}" style="${rsvp==='maybe' ? 'background:#d4a01720;color:var(--gold);border-color:#d4a01740' : ''}" onclick="setRsvp('${m.id}','maybe')">🤔 Maybe</button>
+      <button class="btn btn-sm ${rsvp==='no' ? 'btn-danger' : 'btn-ghost'}" onclick="setRsvp('${m.id}','no')">❌ No</button>
+    </div>`;
+
+    // ETA & comment inputs — only show when attending or maybe
+    const showDetails = rsvp === 'yes' || rsvp === 'maybe';
+    const detailsHtml = showDetails ? `
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div class="grid2">
+        <div>
+          <label>Estimated Arrival</label>
+          <input type="time" value="${m.eta||''}" onchange="setRsvpDetail('${m.id}','eta',this.value)"/>
+        </div>
+        <div>
+          <label>Comments</label>
+          <input type="text" value="${(m.rsvpComment||'').replace(/"/g,'&quot;')}" onchange="setRsvpDetail('${m.id}','rsvpComment',this.value)" placeholder="Bringing chips, running late…"/>
+        </div>
+      </div>
+    </div>` : '';
+
+    // Wings allotment badge for 'yes' people
+    const wingsHtml = rsvp === 'yes' && r.wingAllotments[m.id]
+      ? `<div style="text-align:right;flex-shrink:0"><div class="fw5" style="font-size:15px">${r.wingAllotments[m.id]} wings</div><div class="text-sm text-muted">$${(r.contributions[m.id]||0).toFixed(2)}</div></div>`
+      : `<span class="tag tag-muted" style="font-size:11px;color:${statusColor}">${statusLabel}</span>`;
+
+    return `
+    <div class="member-card" style="${borderStyle}">
+      <div class="row-sb mb${(rsvpBtns || detailsHtml) ? '10' : '0'}">
+        <div class="row gap8">
+          <div class="member-avatar" style="border-color:${statusColor}40">${m.name.substring(0,2).toUpperCase()}</div>
+          <div>
+            <div class="fw5" style="font-size:15px">${m.name}</div>
+            <div class="text-sm" style="color:${statusColor}">${statusLabel}</div>
+          </div>
+        </div>
+        ${wingsHtml}
+      </div>
+      ${rsvpBtns}
+      ${detailsHtml}
+    </div>`;
+  }).join('');
+
+  const titleStr = eventTabLabel();
+
+  return `
+  <div class="section-title">${titleStr}</div>
+  ${eventDateHtml}
+  ${adminSettingsHtml}
+  ${summaryHtml}
+  ${costSummaryHtml}
+  ${state.members.length === 0 ? '<div class="card text-sm text-muted">Add profiles on the Family tab first.</div>' : rsvpCards}`;
 }
 
 // =====================================================================
@@ -1466,7 +1588,7 @@ async function saveMember(id) {
   const notes = document.getElementById('pf-notes').value.trim();
   let member;
   if (id === 'new') {
-    member = { id: 'm' + Date.now(), name, noMax, maxWings, batches, notes, attending: false };
+    member = { id: 'm' + Date.now(), name, noMax, maxWings, batches, notes, attending: false, rsvp: null, eta: '', rsvpComment: '' };
     state.members.push(member);
   } else {
     const idx = state.members.findIndex(m => m.id === id);
@@ -1493,6 +1615,61 @@ async function deleteMember(id) {
   render();
   await deleteMemberFromDB(id);
   toast('Profile deleted.');
+}
+
+// =====================================================================
+// ACTIONS — RSVP
+// =====================================================================
+function formatTime(t) {
+  if (!t) return '';
+  const [h, m] = t.split(':').map(Number);
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 || 12;
+  return `${h12}:${String(m).padStart(2,'0')} ${ampm}`;
+}
+
+async function setRsvp(id, status) {
+  const m = state.members.find(x => x.id === id);
+  if (!m) return;
+  // Toggle off if clicking the same status
+  m.rsvp = m.rsvp === status ? null : status;
+  // Keep legacy attending in sync
+  m.attending = m.rsvp === 'yes';
+  // Clear eta/comment if setting to 'no'
+  if (m.rsvp === 'no') { m.eta = ''; m.rsvpComment = ''; }
+  render();
+  await saveMemberToDB(m);
+  toast(m.rsvp ? `RSVP set to ${m.rsvp}!` : 'RSVP cleared.');
+}
+
+async function setRsvpDetail(id, field, value) {
+  const m = state.members.find(x => x.id === id);
+  if (!m) return;
+  m[field] = value;
+  await saveMemberToDB(m);
+}
+
+function updateEventSetting(key, value) {
+  if (!isAdmin()) return;
+  state.event = state.event || {};
+  state.event[key] = value;
+  render();
+  saveSettings();
+}
+
+async function resetRsvps() {
+  if (!isAdmin()) return;
+  if (!confirm('Reset all RSVPs? Members will need to RSVP again.')) return;
+  for (const m of state.members) {
+    m.rsvp = null;
+    m.eta = '';
+    m.rsvpComment = '';
+    m.attending = false;
+  }
+  render();
+  // Save all members
+  for (const m of state.members) await saveMemberToDB(m);
+  toast('All RSVPs reset.');
 }
 
 async function toggleAttend(id, val) {
