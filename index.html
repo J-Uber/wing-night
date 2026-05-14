@@ -1077,17 +1077,6 @@ function renderEvent(r) {
   const ev = state.event || {};
   const now = new Date();
 
-  // Deadline logic
-  let deadlineHtml = '';
-  if (ev.rsvpDeadline) {
-    const [dy, dm, dd] = ev.rsvpDeadline.split('-').map(Number);
-    const dl = new Date(dy, dm - 1, dd, 23, 59, 59);
-    const isPast = now > dl;
-    deadlineHtml = `<span class="tag ${isPast ? 'tag-red' : 'tag-muted'}" style="font-size:11px">
-      RSVP by ${dl.toLocaleDateString('en-US',{month:'short',day:'numeric'})}${isPast ? ' — closed' : ''}
-    </span>`;
-  }
-
   // Event date display
   let eventDateHtml = '';
   if (ev.date) {
@@ -1102,7 +1091,7 @@ function renderEvent(r) {
     else if (diff < 0) badge = `<span class="tag tag-muted" style="font-size:11px">${Math.abs(diff)}d ago</span>`;
     eventDateHtml = `<div class="row gap8 mb10" style="flex-wrap:wrap">
       <span class="fw5">${edt.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}</span>
-      ${badge} ${deadlineHtml}
+      ${badge}
     </div>`;
   } else {
     eventDateHtml = `<div class="text-sm text-muted mb10">No event date set.${isAdmin() ? ' Set one below.' : ''}</div>`;
@@ -1114,15 +1103,9 @@ function renderEvent(r) {
     adminSettingsHtml = `
     <div class="card mb10">
       <div class="fw6 mb12">Event Settings</div>
-      <div class="grid2 mb10">
-        <div>
-          <label>Event Date</label>
-          <input type="date" id="ev-date" value="${ev.date||''}" onchange="updateEventSetting('date', this.value)"/>
-        </div>
-        <div>
-          <label>RSVP Deadline</label>
-          <input type="date" id="ev-deadline" value="${ev.rsvpDeadline||''}" onchange="updateEventSetting('rsvpDeadline', this.value)"/>
-        </div>
+      <div class="mb10">
+        <label>Event Date</label>
+        <input type="date" id="ev-date" value="${ev.date||''}" onchange="updateEventSetting('date', this.value)"/>
       </div>
       <div class="row gap8" style="flex-wrap:wrap">
         <button class="btn btn-ghost btn-sm" onclick="resetRsvps()">🔄 Reset All RSVPs</button>
@@ -1144,24 +1127,6 @@ function renderEvent(r) {
     <div class="metric"><div class="metric-label">⏳ Pending</div><div class="metric-val text-muted">${pendingCount}</div></div>
   </div>` : '';
 
-  // Wings & cost summary (only if yesCount > 0)
-  const costSummaryHtml = r.n > 0 ? `
-  <div class="card mb10">
-    <div class="fw6 mb10">Contributions (${r.n} attending)</div>
-    ${r.attending.map(m => `
-    <div class="stat-row">
-      <span>${m.name}</span>
-      <div class="row gap8">
-        <span class="text-sm text-muted">${r.wingAllotments[m.id]||0} wings</span>
-        <span class="fw5">$${(r.contributions[m.id]||0).toFixed(2)}</span>
-      </div>
-    </div>`).join('')}
-    <div class="stat-row" style="border:none;margin-top:4px">
-      <span class="text-sm text-muted">Total Collected</span>
-      <span class="fw6">$${Object.values(r.contributions).reduce((a,b)=>a+b,0).toFixed(2)}</span>
-    </div>
-  </div>` : '';
-
   // RSVP member cards
   const rsvpCards = state.members.map(m => {
     const rsvp = m.rsvp || null;
@@ -1180,26 +1145,19 @@ function renderEvent(r) {
     const showDetails = rsvp === 'yes' || rsvp === 'maybe';
     const detailsHtml = showDetails ? `
     <div style="display:flex;flex-direction:column;gap:8px">
-      <div class="grid2">
-        <div>
-          <label>Estimated Arrival</label>
-          <input type="time" value="${m.eta||''}" onchange="setRsvpDetail('${m.id}','eta',this.value)"/>
-        </div>
-        <div>
-          <label>Comments</label>
-          <input type="text" value="${(m.rsvpComment||'').replace(/"/g,'&quot;')}" onchange="setRsvpDetail('${m.id}','rsvpComment',this.value)" placeholder="Bringing chips, running late…"/>
-        </div>
+      <div>
+        <label>Estimated Arrival</label>
+        <input type="time" value="${m.eta||''}" onchange="setRsvpDetail('${m.id}','eta',this.value)"/>
+      </div>
+      <div>
+        <label>Comments</label>
+        <textarea onchange="setRsvpDetail('${m.id}','rsvpComment',this.value)" placeholder="Bringing chips, running late…" style="min-height:80px">${(m.rsvpComment||'').replace(/</g,'&lt;')}</textarea>
       </div>
     </div>` : '';
 
-    // Wings allotment badge for 'yes' people
-    const wingsHtml = rsvp === 'yes' && r.wingAllotments[m.id]
-      ? `<div style="text-align:right;flex-shrink:0"><div class="fw5" style="font-size:15px">${r.wingAllotments[m.id]} wings</div><div class="text-sm text-muted">$${(r.contributions[m.id]||0).toFixed(2)}</div></div>`
-      : `<span class="tag tag-muted" style="font-size:11px;color:${statusColor}">${statusLabel}</span>`;
-
     return `
     <div class="member-card" style="${borderStyle}">
-      <div class="row-sb mb${(rsvpBtns || detailsHtml) ? '10' : '0'}">
+      <div class="row-sb mb10">
         <div class="row gap8">
           <div class="member-avatar" style="border-color:${statusColor}40">${m.name.substring(0,2).toUpperCase()}</div>
           <div>
@@ -1207,7 +1165,6 @@ function renderEvent(r) {
             <div class="text-sm" style="color:${statusColor}">${statusLabel}</div>
           </div>
         </div>
-        ${wingsHtml}
       </div>
       ${rsvpBtns}
       ${detailsHtml}
@@ -1217,11 +1174,13 @@ function renderEvent(r) {
   const titleStr = eventTabLabel();
 
   return `
-  <div class="section-title">${titleStr}</div>
+  <div class="row-sb mb14">
+    <div class="section-title" style="margin-bottom:0">${titleStr}</div>
+    <button class="btn btn-ghost btn-sm" onclick="copyEventUrl(this)" style="flex-shrink:0">🔗 Copy Link</button>
+  </div>
   ${eventDateHtml}
   ${adminSettingsHtml}
   ${summaryHtml}
-  ${costSummaryHtml}
   ${state.members.length === 0 ? '<div class="card text-sm text-muted">Add profiles on the Family tab first.</div>' : rsvpCards}`;
 }
 
@@ -1649,6 +1608,16 @@ async function setRsvpDetail(id, field, value) {
   await saveMemberToDB(m);
 }
 
+function copyEventUrl(btn) {
+  const url = new URL(window.location.href);
+  url.hash = '#event';
+  navigator.clipboard.writeText(url.toString()).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = '✅ Copied!';
+    setTimeout(() => { btn.textContent = orig; }, 2000);
+  }).catch(() => toast('Could not copy — try manually copying the URL.', true));
+}
+
 function updateEventSetting(key, value) {
   if (!isAdmin()) return;
   state.event = state.event || {};
@@ -1846,6 +1815,9 @@ async function init() {
   document.getElementById('loadingScreen').style.display = 'none';
   document.getElementById('nav').style.display = 'flex';
   updateAuthUI();
+  if (window.location.hash === '#event') {
+    state.activeTab = 'event';
+  }
   render();
 }
 
