@@ -245,6 +245,7 @@ select option{background:var(--card)}
   <button onclick="showTab('sauces')">Sauces</button>
   <button onclick="showTab('history')">History</button>
   <button onclick="showTab('charts')">Charts</button>
+  <button onclick="showTab('games')">Games</button>
   <div class="auth-badge">
     <span class="auth-name" id="authName">Guest</span>
     <span class="auth-role anon" id="authRoleBadge">Viewing</span>
@@ -463,7 +464,12 @@ let state = {
   editingSauce: null,
   sauceFilter: 'all',
   sauceSort: 'name',
-  sauceSearch: ''
+  sauceSearch: '',
+  games: [],
+  editingGame: null,
+  gameFilter: 'all',
+  gameSort: 'name',
+  gameSearch: ''
 };
 
 let syncStatus = 'synced';
@@ -551,6 +557,26 @@ async function loadAll() {
         notes: s.notes || '',
         favorite: s.favorite || false,
         outOfStock: s.out_of_stock || false
+      }));
+    }
+
+    // Load games
+    const { data: games } = await db.from('games').select('*').order('name');
+    if (games) {
+      state.games = games.map(g => ({
+        id: g.id,
+        name: g.name,
+        designer: g.designer || '',
+        publisher: g.publisher || '',
+        minPlayers: g.min_players || 2,
+        maxPlayers: g.max_players || 6,
+        minPlaytime: g.min_playtime || 30,
+        maxPlaytime: g.max_playtime || 90,
+        complexity: g.complexity || 'medium',
+        category: g.category || '',
+        owned: g.owned !== false,
+        wishlist: g.wishlist || false,
+        notes: g.notes || ''
       }));
     }
 
@@ -685,6 +711,44 @@ async function deleteSauceFromDB(id) {
   } catch (err) {
     setSyncStatus('error');
     toast('Failed to delete sauce', true);
+  }
+}
+
+async function saveGameToDB(game) {
+  if (!CREDENTIALS_SET || !isAdmin()) return;
+  setSyncStatus('syncing');
+  try {
+    await db.from('games').upsert({
+      id: game.id,
+      name: game.name,
+      designer: game.designer,
+      publisher: game.publisher,
+      min_players: game.minPlayers,
+      max_players: game.maxPlayers,
+      min_playtime: game.minPlaytime,
+      max_playtime: game.maxPlaytime,
+      complexity: game.complexity,
+      category: game.category,
+      owned: game.owned,
+      wishlist: game.wishlist,
+      notes: game.notes
+    });
+    setSyncStatus('synced');
+  } catch (err) {
+    setSyncStatus('error');
+    toast('Failed to save game', true);
+  }
+}
+
+async function deleteGameFromDB(id) {
+  if (!CREDENTIALS_SET || !isAdmin()) return;
+  setSyncStatus('syncing');
+  try {
+    await db.from('games').delete().eq('id', id);
+    setSyncStatus('synced');
+  } catch (err) {
+    setSyncStatus('error');
+    toast('Failed to delete game', true);
   }
 }
 
@@ -839,7 +903,7 @@ function updateEventTabLabel() {
 function showTab(tab) {
   state.activeTab = tab;
   document.querySelectorAll('nav button').forEach((b, i) => {
-    b.classList.toggle('active', ['dashboard','profiles','event','cook','sauces','history','charts'][i] === tab);
+    b.classList.toggle('active', ['dashboard','profiles','event','cook','sauces','history','charts','games'][i] === tab);
   });
   render();
 }
@@ -856,6 +920,7 @@ function render() {
     case 'sauces':    app.innerHTML = renderSauces();     break;
     case 'history':   app.innerHTML = renderHistory();    break;
     case 'charts':    app.innerHTML = renderCharts(); setTimeout(() => drawChart(), 50); break;
+    case 'games':     app.innerHTML = renderGames();     break;
   }
 }
 
@@ -1799,6 +1864,207 @@ async function deleteHistoryEntry(id) {
   render();
   await deleteHistoryFromDB(id);
   toast('Entry deleted.');
+}
+
+// =====================================================================
+// BOARD GAMES
+// =====================================================================
+function renderGames() {
+  const eg = state.editingGame;
+  let formHtml = '';
+  if (eg !== null && isAdmin()) {
+    const isNew = eg === 'new';
+    const g = isNew
+      ? {id:'',name:'',designer:'',publisher:'',minPlayers:2,maxPlayers:6,minPlaytime:30,maxPlaytime:90,complexity:'medium',category:'',owned:true,wishlist:false,notes:''}
+      : state.games.find(x => x.id === eg) || {};
+    formHtml = `
+    <div class="card" style="border-color:#ffffff22;margin-bottom:14px">
+      <div class="fw6 mb14">${isNew ? 'New Game' : 'Edit Game'}</div>
+      <label>Game Name</label>
+      <input id="gm-name" value="${g.name||''}" placeholder="e.g. Catan" class="mb10"/>
+      <label>Designer</label>
+      <input id="gm-designer" value="${g.designer||''}" placeholder="e.g. Klaus Teuber" class="mb10"/>
+      <label>Publisher</label>
+      <input id="gm-publisher" value="${g.publisher||''}" placeholder="e.g. Asmodee" class="mb10"/>
+      <div class="grid2 mb10">
+        <div><label>Min Players</label><input id="gm-minp" type="number" inputmode="numeric" min="1" value="${g.minPlayers||2}"/></div>
+        <div><label>Max Players</label><input id="gm-maxp" type="number" inputmode="numeric" min="1" value="${g.maxPlayers||6}"/></div>
+      </div>
+      <div class="grid2 mb10">
+        <div><label>Min Playtime (min)</label><input id="gm-mint" type="number" inputmode="numeric" min="1" value="${g.minPlaytime||30}"/></div>
+        <div><label>Max Playtime (min)</label><input id="gm-maxt" type="number" inputmode="numeric" min="1" value="${g.maxPlaytime||90}"/></div>
+      </div>
+      <label>Complexity</label>
+      <select id="gm-complexity" class="mb10">
+        ${['light','medium','heavy'].map(c => `<option value="${c}" ${(g.complexity||'medium')===c?'selected':''}>${c.charAt(0).toUpperCase()+c.slice(1)}</option>`).join('')}
+      </select>
+      <label>Category / Genre</label>
+      <input id="gm-category" value="${g.category||''}" placeholder="e.g. Strategy, Party, Cooperative" class="mb10"/>
+      <div class="row-sb mb10" style="padding:10px 12px;background:var(--card2);border:1px solid var(--border);border-radius:var(--radius);">
+        <span style="font-size:14px;color:var(--text)">✅ Owned</span>
+        <label class="toggle"><input type="checkbox" id="gm-owned" ${g.owned!==false?'checked':''}><span class="toggle-slider"></span></label>
+      </div>
+      <div class="row-sb mb10" style="padding:10px 12px;background:var(--card2);border:1px solid var(--border);border-radius:var(--radius);">
+        <span style="font-size:14px;color:var(--text)">🎯 Wishlist</span>
+        <label class="toggle"><input type="checkbox" id="gm-wishlist" ${g.wishlist?'checked':''}><span class="toggle-slider"></span></label>
+      </div>
+      <label>Notes</label>
+      <textarea id="gm-notes" placeholder="House rules, best player count, where to buy..." class="mb10">${g.notes||''}</textarea>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary flex1" onclick="saveGame('${eg}')">Save Game</button>
+        <button class="btn btn-ghost" onclick="cancelGameEdit()">Cancel</button>
+        ${!isNew ? `<button class="btn btn-danger" onclick="deleteGame('${eg}')">Delete</button>` : ''}
+      </div>
+    </div>`;
+  }
+
+  let games = [...state.games];
+  const search = (state.gameSearch || '').toLowerCase();
+  if (search) games = games.filter(g =>
+    g.name.toLowerCase().includes(search) ||
+    (g.designer||'').toLowerCase().includes(search) ||
+    (g.category||'').toLowerCase().includes(search) ||
+    (g.notes||'').toLowerCase().includes(search));
+  if (state.gameFilter === 'owned') games = games.filter(g => g.owned !== false);
+  else if (state.gameFilter === 'wishlist') games = games.filter(g => g.wishlist);
+  else if (state.gameFilter === 'light') games = games.filter(g => g.complexity === 'light');
+  else if (state.gameFilter === 'medium') games = games.filter(g => g.complexity === 'medium');
+  else if (state.gameFilter === 'heavy') games = games.filter(g => g.complexity === 'heavy');
+  if (state.gameSort === 'name') games.sort((a, b) => a.name.localeCompare(b.name));
+  else if (state.gameSort === 'players') games.sort((a, b) => (a.maxPlayers||0) - (b.maxPlayers||0));
+  else if (state.gameSort === 'playtime') games.sort((a, b) => (a.maxPlaytime||0) - (b.maxPlaytime||0));
+  else if (state.gameSort === 'complexity') { const ord={light:1,medium:2,heavy:3}; games.sort((a,b) => (ord[a.complexity]||2)-(ord[b.complexity]||2)); }
+
+  function complexityColor(c) {
+    return c === 'light' ? '#4caf82' : c === 'heavy' ? '#e05555' : '#d4a017';
+  }
+  function complexityEmoji(c) {
+    return c === 'light' ? '🟢' : c === 'heavy' ? '🔴' : '🟡';
+  }
+  function formatPlaytime(min, max) {
+    if (!min && !max) return null;
+    if (min === max || !max) return `${min||max} min`;
+    return `${min}–${max} min`;
+  }
+
+  const cards = games.map(g => {
+    const cc = complexityColor(g.complexity);
+    const pt = formatPlaytime(g.minPlaytime, g.maxPlaytime);
+    const players = (g.minPlayers && g.maxPlayers && g.minPlayers !== g.maxPlayers)
+      ? `${g.minPlayers}–${g.maxPlayers}` : (g.minPlayers || g.maxPlayers || '?');
+    return `
+    <div class="sauce-card" style="${g.wishlist?'border-color:#d4a01740;':''} ${g.owned===false?'opacity:0.7':''}">
+      <div class="row-sb mb8">
+        <div class="row gap8" style="flex:1;min-width:0">
+          <div class="sauce-icon" style="font-size:20px">🎲</div>
+          <div style="flex:1;min-width:0">
+            <div class="fw5" style="font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${g.name}</div>
+            ${g.designer ? `<div class="text-sm text-muted" style="margin-bottom:1px">by ${g.designer}</div>` : ''}
+            <div style="font-size:11px;color:${cc};font-weight:500">${complexityEmoji(g.complexity||'medium')} ${(g.complexity||'medium').charAt(0).toUpperCase()+(g.complexity||'medium').slice(1)}</div>
+          </div>
+        </div>
+        <div class="row" style="gap:4px;flex-shrink:0">
+          ${isAdmin() ? `<button class="btn btn-ghost btn-sm" onclick="editGame('${g.id}')">Edit</button>` : ''}
+        </div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:${g.category||g.notes||pt?'8px':'0'}">
+        ${g.wishlist ? '<span class="tag tag-muted">🎯 Wishlist</span>' : ''}
+        ${g.owned !== false && !g.wishlist ? '<span class="tag tag-green">✅ Owned</span>' : ''}
+        ${players ? `<span class="tag tag-primary">👥 ${players}p</span>` : ''}
+        ${pt ? `<span class="tag tag-primary">⏱ ${pt}</span>` : ''}
+      </div>
+      ${g.category ? `<div class="text-sm text-muted" style="margin-bottom:${g.notes?'6px':'0'}">${g.category}</div>` : ''}
+      ${g.notes ? `<div class="text-sm text-muted" style="font-style:italic">${g.notes}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  const total = state.games.length;
+  const ownedCount = state.games.filter(g => g.owned !== false).length;
+  const wishlistCount = state.games.filter(g => g.wishlist).length;
+  const maxPlayers = total ? Math.max(...state.games.map(g => g.maxPlayers||0)) : 0;
+
+  return `
+  <div class="section-title">Board Games</div>
+  ${isAdmin() && eg === null ? `<button class="btn btn-primary btn-full mb10" onclick="newGame()">+ Add Game</button>` : ''}
+  ${formHtml}
+  ${total > 0 && eg === null ? `
+  <div class="grid2-auto mb10">
+    <div class="metric"><div class="metric-label">Total Games</div><div class="metric-val">${total}</div></div>
+    <div class="metric"><div class="metric-label">Owned</div><div class="metric-val text-green">${ownedCount}</div></div>
+    <div class="metric"><div class="metric-label">Wishlist</div><div class="metric-val text-gold">${wishlistCount}</div></div>
+    <div class="metric"><div class="metric-label">Max Players</div><div class="metric-val">${maxPlayers||'—'}</div></div>
+  </div>
+  <input type="search" placeholder="Search games..." value="${state.gameSearch||''}"
+    oninput="updateGameSearch(this)" class="mb10"/>
+  <div class="filter-bar">
+    ${[['all','All'],['owned','✅ Owned'],['wishlist','🎯 Wishlist'],['light','Light'],['medium','Medium'],['heavy','Heavy']].map(([k,l]) =>
+      `<button class="filter-chip ${state.gameFilter===k?'active':''}" onclick="setGameFilter('${k}')">${l}</button>`).join('')}
+  </div>
+  <div class="sort-row">
+    <span class="text-sm text-muted" style="flex-shrink:0">Sort:</span>
+    <select onchange="state.gameSort=this.value;render()" style="flex:1;font-size:13px;padding:7px 10px">
+      <option value="name" ${state.gameSort==='name'?'selected':''}>Name A–Z</option>
+      <option value="players" ${state.gameSort==='players'?'selected':''}>Player Count</option>
+      <option value="playtime" ${state.gameSort==='playtime'?'selected':''}>Playtime</option>
+      <option value="complexity" ${state.gameSort==='complexity'?'selected':''}>Complexity</option>
+    </select>
+  </div>
+  ${games.length === 0
+    ? `<div class="empty-state"><div>🎲</div><div style="font-size:14px">No games match this filter.</div></div>`
+    : cards}
+  ` : eg === null ? `<div class="empty-state"><div>🎲</div><div style="font-size:15px;margin-bottom:6px">No games yet.</div>
+    ${isAdmin() ? '<div class="text-sm text-muted">Start building your collection above.</div>' : '<div class="text-sm text-muted">No board games added yet.</div>'}</div>` : ''}`;
+}
+
+function newGame() { state.editingGame = 'new'; render(); }
+function cancelGameEdit() { state.editingGame = null; render(); }
+function editGame(id) { state.editingGame = id; render(); }
+function setGameFilter(f) { state.gameFilter = f; render(); }
+function updateGameSearch(input) {
+  state.gameSearch = input.value;
+  const cursorPos = input.selectionStart;
+  render();
+  const newInput = document.querySelector('input[type="search"]');
+  if (newInput) { newInput.focus(); newInput.setSelectionRange(cursorPos, cursorPos); }
+}
+
+async function saveGame(id) {
+  if (!isAdmin()) return toast('Only admin can edit games.', true);
+  const name = document.getElementById('gm-name').value.trim();
+  if (!name) return toast('Please enter a game name.', true);
+  const designer = document.getElementById('gm-designer').value.trim();
+  const publisher = document.getElementById('gm-publisher').value.trim();
+  const minPlayers = parseInt(document.getElementById('gm-minp').value) || 2;
+  const maxPlayers = parseInt(document.getElementById('gm-maxp').value) || 6;
+  const minPlaytime = parseInt(document.getElementById('gm-mint').value) || 30;
+  const maxPlaytime = parseInt(document.getElementById('gm-maxt').value) || 90;
+  const complexity = document.getElementById('gm-complexity').value;
+  const category = document.getElementById('gm-category').value.trim();
+  const owned = document.getElementById('gm-owned').checked;
+  const wishlist = document.getElementById('gm-wishlist').checked;
+  const notes = document.getElementById('gm-notes').value.trim();
+  let game;
+  if (id === 'new') {
+    game = { id: 'g' + Date.now(), name, designer, publisher, minPlayers, maxPlayers, minPlaytime, maxPlaytime, complexity, category, owned, wishlist, notes };
+    state.games.push(game);
+  } else {
+    const idx = state.games.findIndex(g => g.id === id);
+    if (idx >= 0) { state.games[idx] = {...state.games[idx], name, designer, publisher, minPlayers, maxPlayers, minPlaytime, maxPlaytime, complexity, category, owned, wishlist, notes}; game = state.games[idx]; }
+  }
+  state.editingGame = null;
+  render();
+  await saveGameToDB(game);
+  toast('Game saved.');
+}
+
+async function deleteGame(id) {
+  if (!isAdmin()) return toast('Only admin can delete games.', true);
+  if (!confirm('Delete this game?')) return;
+  state.games = state.games.filter(g => g.id !== id);
+  state.editingGame = null;
+  render();
+  await deleteGameFromDB(id);
+  toast('Game deleted.');
 }
 
 // =====================================================================
