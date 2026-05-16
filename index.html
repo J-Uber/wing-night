@@ -469,7 +469,8 @@ let state = {
   editingGame: null,
   gameFilter: 'all',
   gameSort: 'name',
-  gameSearch: ''
+  gameSearch: '',
+  gamePlayerFilter: 'any'
 };
 
 let syncStatus = 'synced';
@@ -1930,6 +1931,10 @@ function renderGames() {
   else if (state.gameFilter === 'light') games = games.filter(g => g.complexity === 'light');
   else if (state.gameFilter === 'medium') games = games.filter(g => g.complexity === 'medium');
   else if (state.gameFilter === 'heavy') games = games.filter(g => g.complexity === 'heavy');
+  if (state.gamePlayerFilter && state.gamePlayerFilter !== 'any') {
+    const minP = parseInt(state.gamePlayerFilter);
+    games = games.filter(g => (g.maxPlayers || 0) >= minP);
+  }
   if (state.gameSort === 'name') games.sort((a, b) => a.name.localeCompare(b.name));
   else if (state.gameSort === 'players') games.sort((a, b) => (a.maxPlayers||0) - (b.maxPlayers||0));
   else if (state.gameSort === 'playtime') games.sort((a, b) => (a.maxPlaytime||0) - (b.maxPlaytime||0));
@@ -1999,6 +2004,18 @@ function renderGames() {
   <div class="filter-bar">
     ${[['all','All'],['owned','✅ Owned'],['wishlist','🎯 Wishlist'],['light','Light'],['medium','Medium'],['heavy','Heavy']].map(([k,l]) =>
       `<button class="filter-chip ${state.gameFilter===k?'active':''}" onclick="setGameFilter('${k}')">${l}</button>`).join('')}
+  </div>
+  <div class="sort-row">
+    <span class="text-sm text-muted" style="flex-shrink:0">Players:</span>
+    <select onchange="state.gamePlayerFilter=this.value;render()" style="flex:1;font-size:13px;padding:7px 10px">
+      <option value="any" ${state.gamePlayerFilter==='any'?'selected':''}>Any</option>
+      <option value="2" ${state.gamePlayerFilter==='2'?'selected':''}>2+</option>
+      <option value="3" ${state.gamePlayerFilter==='3'?'selected':''}>3+</option>
+      <option value="4" ${state.gamePlayerFilter==='4'?'selected':''}>4+</option>
+      <option value="5" ${state.gamePlayerFilter==='5'?'selected':''}>5+</option>
+      <option value="6" ${state.gamePlayerFilter==='6'?'selected':''}>6+</option>
+      <option value="8" ${state.gamePlayerFilter==='8'?'selected':''}>8+</option>
+    </select>
   </div>
   <div class="sort-row">
     <span class="text-sm text-muted" style="flex-shrink:0">Sort:</span>
