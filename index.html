@@ -222,29 +222,37 @@ select option{background:var(--card)}
   <div class="modal-box">
     <div class="modal-title" id="authModalTitle">Sign In</div>
 
-    <!-- Tab switcher -->
+    <!-- Tab switcher: Sign In / Create Profile -->
     <div class="modal-tabs" id="authTabs">
-      <button class="modal-tab active" id="tabMember" onclick="switchAuthTab('member')">Member</button>
-      <button class="modal-tab" id="tabAdmin" onclick="switchAuthTab('admin')">Admin</button>
+      <button class="modal-tab active" id="tabSignin" onclick="switchAuthTab('signin')">Sign In</button>
+      <button class="modal-tab" id="tabRegister" onclick="switchAuthTab('register')">Create Profile</button>
     </div>
 
-    <!-- Member login form -->
-    <div id="formMember">
-      <label>Username</label>
-      <input id="auth-username" type="text" autocomplete="username" placeholder="your username" class="mb10" onkeydown="if(event.key==='Enter')submitLogin()"/>
+    <!-- Unified login form (auto-detects member vs admin) -->
+    <div id="formSignin">
+      <label>Username or Email</label>
+      <input id="auth-username" type="text" autocomplete="username" placeholder="username or email" class="mb10" onkeydown="if(event.key==='Enter')submitLogin()"/>
       <label>Password</label>
       <input id="auth-password" type="password" autocomplete="current-password" placeholder="••••••••" class="mb14" onkeydown="if(event.key==='Enter')submitLogin()"/>
       <button class="btn btn-primary btn-full" onclick="submitLogin()" id="loginBtn">Sign In</button>
     </div>
 
-    <!-- Admin login form -->
-    <div id="formAdmin" style="display:none">
-      <label>Email</label>
-      <input id="auth-email" type="email" autocomplete="email" placeholder="you@example.com" class="mb10" onkeydown="if(event.key==='Enter')submitAdminLogin()"/>
+    <!-- Create Profile form -->
+    <div id="formRegister" style="display:none">
+      <label>Display Name</label>
+      <input id="reg-name" type="text" autocomplete="name" placeholder="Your name" class="mb10" onkeydown="if(event.key==='Enter')submitRegister()"/>
+      <label>Username</label>
+      <input id="reg-username" type="text" autocomplete="username" placeholder="choose a username" class="mb10" onkeydown="if(event.key==='Enter')submitRegister()"/>
       <label>Password</label>
-      <input id="auth-adminpass" type="password" autocomplete="current-password" placeholder="••••••••" class="mb14" onkeydown="if(event.key==='Enter')submitAdminLogin()"/>
-      <button class="btn btn-primary btn-full" onclick="submitAdminLogin()" id="adminLoginBtn">Sign In as Admin</button>
+      <input id="reg-password" type="password" autocomplete="new-password" placeholder="at least 6 characters" class="mb10" onkeydown="if(event.key==='Enter')submitRegister()"/>
+      <label>Confirm Password</label>
+      <input id="reg-confirm" type="password" autocomplete="new-password" placeholder="••••••••" class="mb14" onkeydown="if(event.key==='Enter')submitRegister()"/>
+      <button class="btn btn-primary btn-full" onclick="submitRegister()" id="registerBtn">Create Profile</button>
     </div>
+
+    <!-- Hidden fields kept for admin login compatibility -->
+    <input id="auth-email" type="hidden" autocomplete="email"/>
+    <input id="auth-adminpass" type="hidden" autocomplete="current-password"/>
 
     <button class="btn btn-ghost btn-full" style="margin-top:8px" onclick="closeAuthModal()">Cancel</button>
   </div>
@@ -322,37 +330,40 @@ function handleAuthNavBtn() {
 // =====================================================================
 // AUTH MODAL
 // =====================================================================
-let currentAuthTab = 'member';
+let currentAuthTab = 'signin';
 
-function openAuthModal() {
+function openAuthModal(tab) {
   document.getElementById('authModal').classList.remove('hidden');
+  switchAuthTab(tab || 'signin');
   setTimeout(() => document.getElementById('auth-username')?.focus(), 100);
 }
 function closeAuthModal() {
   document.getElementById('authModal').classList.add('hidden');
   document.getElementById('auth-username').value = '';
   document.getElementById('auth-password').value = '';
-  document.getElementById('auth-email').value = '';
-  document.getElementById('auth-adminpass').value = '';
+  document.getElementById('reg-name').value = '';
+  document.getElementById('reg-username').value = '';
+  document.getElementById('reg-password').value = '';
+  document.getElementById('reg-confirm').value = '';
 }
 function handleModalOverlayClick(e) {
   if (e.target === document.getElementById('authModal')) closeAuthModal();
 }
 function switchAuthTab(tab) {
   currentAuthTab = tab;
-  document.getElementById('formMember').style.display = tab === 'member' ? '' : 'none';
-  document.getElementById('formAdmin').style.display  = tab === 'admin'  ? '' : 'none';
-  document.getElementById('tabMember').classList.toggle('active', tab === 'member');
-  document.getElementById('tabAdmin').classList.toggle('active',  tab === 'admin');
+  document.getElementById('formSignin').style.display   = tab === 'signin'   ? '' : 'none';
+  document.getElementById('formRegister').style.display = tab === 'register' ? '' : 'none';
+  document.getElementById('tabSignin').classList.toggle('active',   tab === 'signin');
+  document.getElementById('tabRegister').classList.toggle('active', tab === 'register');
   setTimeout(() => {
-    (tab === 'member'
+    (tab === 'signin'
       ? document.getElementById('auth-username')
-      : document.getElementById('auth-email'))?.focus();
+      : document.getElementById('reg-name'))?.focus();
   }, 50);
 }
 
 // =====================================================================
-// MEMBER LOGIN — calls Postgres function member_login()
+// UNIFIED LOGIN — tries member login first; if input looks like email, tries admin
 // =====================================================================
 async function submitLogin() {
   const username = document.getElementById('auth-username').value.trim();
@@ -363,7 +374,24 @@ async function submitLogin() {
   btn.textContent = 'Signing in…';
   btn.disabled = true;
 
+  // If input contains '@', attempt admin (Supabase Auth) login first
+  const looksLikeEmail = username.includes('@');
+
   try {
+    if (looksLikeEmail) {
+      // Try admin login
+      const { data, error } = await db.auth.signInWithPassword({ email: username, password });
+      if (!error) {
+        auth = { role: 'admin', name: data.user.email.split('@')[0], memberId: null };
+        updateAuthUI();
+        closeAuthModal();
+        render();
+        toast('Welcome, Admin!');
+        return;
+      }
+    }
+
+    // Try member login
     const { data, error } = await db.rpc('member_login', {
       p_username: username,
       p_password: password
@@ -384,21 +412,15 @@ async function submitLogin() {
 }
 
 // =====================================================================
-// ADMIN LOGIN — Supabase Auth (email + password)
+// ADMIN LOGIN — Supabase Auth (email + password) — kept for internal use
 // =====================================================================
 async function submitAdminLogin() {
   const email    = document.getElementById('auth-email').value.trim();
   const password = document.getElementById('auth-adminpass').value;
   if (!email || !password) return toast('Enter your email and password.', true);
-
-  const btn = document.getElementById('adminLoginBtn');
-  btn.textContent = 'Signing in…';
-  btn.disabled = true;
-
   try {
     const { data, error } = await db.auth.signInWithPassword({ email, password });
     if (error) throw error;
-
     auth = { role: 'admin', name: data.user.email.split('@')[0], memberId: null };
     updateAuthUI();
     closeAuthModal();
@@ -406,8 +428,60 @@ async function submitAdminLogin() {
     toast('Welcome, Admin!');
   } catch (err) {
     toast(err.message || 'Admin login failed.', true);
+  }
+}
+
+// =====================================================================
+// REGISTER — create a new member profile with username + password
+// =====================================================================
+async function submitRegister() {
+  const name     = document.getElementById('reg-name').value.trim();
+  const username = document.getElementById('reg-username').value.trim();
+  const password = document.getElementById('reg-password').value;
+  const confirm  = document.getElementById('reg-confirm').value;
+
+  if (!name)     return toast('Please enter your display name.', true);
+  if (!username) return toast('Please choose a username.', true);
+  if (!password) return toast('Please enter a password.', true);
+  if (password !== confirm) return toast('Passwords do not match.', true);
+  if (password.length < 6)  return toast('Password must be at least 6 characters.', true);
+
+  const btn = document.getElementById('registerBtn');
+  btn.textContent = 'Creating profile…';
+  btn.disabled = true;
+
+  try {
+    // Create the member row + set credentials via a DB function
+    const { data, error } = await db.rpc('create_member_with_login', {
+      p_name: name,
+      p_username: username,
+      p_password: password
+    });
+    if (error) throw error;
+
+    // Log them in immediately
+    auth = { role: 'member', name: name, memberId: data.id };
+    // Reload members list so the new profile shows up
+    const { data: members } = await db.from('members')
+      .select('id, name, no_max, max_wings, batches, notes, attending, username, sort_order, rsvp, eta, rsvp_comment, avatar_url')
+      .order('sort_order');
+    if (members) {
+      state.members = members.map(m => ({
+        id: m.id, name: m.name, noMax: m.no_max, maxWings: m.max_wings,
+        batches: m.batches || ['b1','b2','b3'], notes: m.notes || '',
+        attending: m.attending || false, hasLogin: !!m.username,
+        rsvp: m.rsvp || null, eta: m.eta || '', rsvpComment: m.rsvp_comment || '',
+        avatarUrl: m.avatar_url || null
+      }));
+    }
+    updateAuthUI();
+    closeAuthModal();
+    render();
+    toast(`Profile created! Welcome, ${name}!`);
+  } catch (err) {
+    toast(err.message || 'Could not create profile. The username may already be taken.', true);
   } finally {
-    btn.textContent = 'Sign In as Admin';
+    btn.textContent = 'Create Profile';
     btn.disabled = false;
   }
 }
