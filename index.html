@@ -262,6 +262,7 @@ select option{background:var(--card)}
   <span class="nav-title">Wing Night</span>
   <button class="active" onclick="showTab('dashboard')">Dashboard</button>
   <button onclick="showTab('profiles')">Family</button>
+  <button onclick="showTab('eventtypes')">Events</button>
   <button id="eventTabBtn" onclick="showTab('event')">Tonight</button>
   <button onclick="showTab('cook')">Cook</button>
   <button onclick="showTab('sauces')">Sauces</button>
@@ -561,7 +562,10 @@ let state = {
   gameFilter: 'all',
   gameSort: 'name',
   gameSearch: '',
-  gamePlayerFilter: 'any'
+  gamePlayerFilter: 'any',
+  eventTypes: [],          // [{id, name, memberIds:[]}]
+  activeEventType: null,   // id of selected event type for RSVP
+  editingEventType: null   // id | 'new' | null
 };
 
 let syncStatus = 'synced';
@@ -606,6 +610,7 @@ async function loadAll() {
         if (row.key === 'costs') state.costs = row.value;
         if (row.key === 'batches') state.batches = row.value;
         if (row.key === 'event') state.event = row.value;
+        if (row.key === 'eventTypes') state.eventTypes = row.value || [];
       });
     } else {
       await db.from('settings').upsert([
@@ -725,7 +730,8 @@ function saveSettings() {
       await db.from('settings').upsert([
         { key: 'costs', value: state.costs },
         { key: 'batches', value: state.batches },
-        { key: 'event', value: state.event }
+        { key: 'event', value: state.event },
+        { key: 'eventTypes', value: state.eventTypes }
       ]);
       setSyncStatus('synced');
     } catch (err) {
@@ -997,7 +1003,7 @@ function updateEventTabLabel() {
 function showTab(tab) {
   state.activeTab = tab;
   document.querySelectorAll('nav button').forEach((b, i) => {
-    b.classList.toggle('active', ['dashboard','profiles','event','cook','sauces','history','charts','games','account'][i] === tab);
+    b.classList.toggle('active', ['dashboard','profiles','eventtypes','event','cook','sauces','history','charts','games','account'][i] === tab);
   });
   render();
 }
@@ -1007,9 +1013,10 @@ function render() {
   const app = document.getElementById('app');
   const r = calc();
   switch (state.activeTab) {
-    case 'dashboard': app.innerHTML = renderDashboard(r); break;
-    case 'profiles':  app.innerHTML = renderProfiles(r);  break;
-    case 'event':     app.innerHTML = renderEvent(r);     break;
+    case 'dashboard':   app.innerHTML = renderDashboard(r); break;
+    case 'profiles':    app.innerHTML = renderProfiles(r);  break;
+    case 'eventtypes':  app.innerHTML = renderEventTypes(); break;
+    case 'event':       app.innerHTML = renderEvent(r);     break;
     case 'cook':      app.innerHTML = renderCook(r);      break;
     case 'sauces':    app.innerHTML = renderSauces();     break;
     case 'history':   app.innerHTML = renderHistory();    break;
@@ -1231,11 +1238,149 @@ function renderProfiles(r) {
 }
 
 // =====================================================================
+// EVENT TYPES
+// =====================================================================
+function renderEventTypes() {
+  const ee = state.editingEventType;
+
+  let formHtml = '';
+  if (ee !== null && isAdmin()) {
+    const isNew = ee === 'new';
+    const et = isNew
+      ? { id: '', name: '', memberIds: [] }
+      : state.eventTypes.find(x => x.id === ee) || {};
+
+    const memberChecks = state.members.map(m => `
+    <div class="check-row">
+      <input type="checkbox" id="et-m-${m.id}" ${(et.memberIds||[]).includes(m.id) ? 'checked' : ''}/>
+      <label for="et-m-${m.id}">${m.name}</label>
+    </div>`).join('');
+
+    formHtml = `
+    <div class="card" style="border-color:#ffffff22;margin-bottom:14px">
+      <div class="fw6 mb14">${isNew ? 'New Event Type' : 'Edit Event Type'}</div>
+      <label>Event Type Name</label>
+      <input id="et-name" value="${et.name||''}" placeholder="e.g. Wing Night, Game Night" class="mb12"/>
+      <label>Members Included</label>
+      <div style="display:flex;flex-direction:column;gap:2px;margin-bottom:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;">
+        ${state.members.length === 0
+          ? '<div class="text-sm text-muted" style="padding:6px 0">No profiles yet — add them on the Family tab.</div>'
+          : memberChecks}
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary flex1" onclick="saveEventType('${ee}')">Save Event Type</button>
+        <button class="btn btn-ghost" onclick="cancelEventTypeEdit()">Cancel</button>
+        ${!isNew ? `<button class="btn btn-danger" onclick="deleteEventType('${ee}')">Delete</button>` : ''}
+      </div>
+    </div>`;
+  }
+
+  const typeCards = state.eventTypes.map(et => {
+    const memberNames = (et.memberIds||[])
+      .map(id => state.members.find(m => m.id === id)?.name).filter(Boolean);
+    const isActive = state.activeEventType === et.id;
+    return `
+    <div class="card mb10" style="${isActive ? 'border-color:#ffffff28' : ''}">
+      <div class="row-sb mb8">
+        <div class="fw5" style="font-size:15px">${et.name}
+          ${isActive ? '<span class="tag tag-green" style="margin-left:6px;font-size:10px">Active</span>' : ''}
+        </div>
+        <div class="row" style="gap:6px">
+          ${isAdmin() ? `<button class="btn btn-ghost btn-sm" onclick="editEventType('${et.id}')">Edit</button>` : ''}
+        </div>
+      </div>
+      <div class="text-sm text-muted mb10">
+        ${memberNames.length ? memberNames.join(' · ') : '<span style="font-style:italic">No members assigned</span>'}
+      </div>
+      <button class="btn btn-sm ${isActive ? 'btn-success' : 'btn-primary'} btn-full"
+        onclick="setActiveEventType('${et.id}')">
+        ${isActive ? '✅ Active — Click to Deselect' : 'Set as Active Event'}
+      </button>
+    </div>`;
+  }).join('');
+
+  return `
+  <div class="section-title">Event Types</div>
+  ${!isAdmin() ? readonlyNotice('Sign in as admin to create or edit Event Types.') : ''}
+  ${isAdmin() && ee === null ? `<button class="btn btn-primary btn-full mb14" onclick="newEventType()">+ New Event Type</button>` : ''}
+  ${formHtml}
+  ${state.eventTypes.length === 0 && ee === null
+    ? `<div class="empty-state"><div>📅</div><div style="font-size:15px;margin-bottom:6px">No event types yet.</div>
+       ${isAdmin() ? '<div class="text-sm text-muted">Create an event type like "Wing Night" or "Game Night" above.</div>' : ''}</div>`
+    : typeCards}`;
+}
+
+// Event Type actions
+function newEventType()        { if (!isAdmin()) return; state.editingEventType = 'new'; render(); }
+function editEventType(id)     { if (!isAdmin()) return; state.editingEventType = id; render(); }
+function cancelEventTypeEdit() { state.editingEventType = null; render(); }
+
+function setActiveEventType(id) {
+  state.activeEventType = state.activeEventType === id ? null : id;
+  render();
+}
+
+function saveEventType(id) {
+  if (!isAdmin()) return toast('Admin only.', true);
+  const name = document.getElementById('et-name')?.value.trim();
+  if (!name) return toast('Please enter an event type name.', true);
+  const memberIds = state.members
+    .filter(m => document.getElementById('et-m-' + m.id)?.checked)
+    .map(m => m.id);
+  if (id === 'new') {
+    const et = { id: 'et' + Date.now(), name, memberIds };
+    state.eventTypes.push(et);
+  } else {
+    const idx = state.eventTypes.findIndex(x => x.id === id);
+    if (idx >= 0) state.eventTypes[idx] = { ...state.eventTypes[idx], name, memberIds };
+  }
+  state.editingEventType = null;
+  render();
+  saveSettings();
+  toast('Event Type saved.');
+}
+
+function deleteEventType(id) {
+  if (!isAdmin()) return;
+  if (!confirm('Delete this Event Type?')) return;
+  state.eventTypes = state.eventTypes.filter(x => x.id !== id);
+  if (state.activeEventType === id) state.activeEventType = null;
+  state.editingEventType = null;
+  render();
+  saveSettings();
+  toast('Event Type deleted.');
+}
+
+// =====================================================================
 // EVENT NIGHT / RSVP
 // =====================================================================
 function renderEvent(r) {
   const ev = state.event || {};
   const now = new Date();
+
+  // Active event type
+  const activeET = state.activeEventType
+    ? state.eventTypes.find(x => x.id === state.activeEventType)
+    : null;
+
+  // Members to show: if an event type is active, filter to its members; else show all
+  const visibleMembers = activeET
+    ? state.members.filter(m => (activeET.memberIds||[]).includes(m.id))
+    : state.members;
+
+  // Event Type selector pill row
+  const etSelectorHtml = state.eventTypes.length > 0 ? `
+  <div class="mb10">
+    <div class="text-sm text-muted mb8">Event Type</div>
+    <div class="filter-bar">
+      <button class="filter-chip ${!state.activeEventType ? 'active' : ''}"
+        onclick="state.activeEventType=null;render()">All Members</button>
+      ${state.eventTypes.map(et =>
+        `<button class="filter-chip ${state.activeEventType===et.id ? 'active' : ''}"
+          onclick="state.activeEventType='${et.id}';render()">${et.name}</button>`
+      ).join('')}
+    </div>
+  </div>` : '';
 
   // Event date display
   let eventDateHtml = '';
@@ -1280,13 +1425,13 @@ function renderEvent(r) {
     </div>`;
   }
 
-  // RSVP summary counts
-  const yesCount    = state.members.filter(m => m.rsvp === 'yes').length;
-  const noCount     = state.members.filter(m => m.rsvp === 'no').length;
-  const maybeCount  = state.members.filter(m => m.rsvp === 'maybe').length;
-  const pendingCount= state.members.filter(m => !m.rsvp).length;
+  // RSVP summary counts — scoped to visible members
+  const yesCount    = visibleMembers.filter(m => m.rsvp === 'yes').length;
+  const noCount     = visibleMembers.filter(m => m.rsvp === 'no').length;
+  const maybeCount  = visibleMembers.filter(m => m.rsvp === 'maybe').length;
+  const pendingCount= visibleMembers.filter(m => !m.rsvp).length;
 
-  const summaryHtml = state.members.length > 0 ? `
+  const summaryHtml = visibleMembers.length > 0 ? `
   <div class="grid4 mb10">
     <div class="metric"><div class="metric-label">✅ Yes</div><div class="metric-val text-green">${yesCount}</div></div>
     <div class="metric"><div class="metric-label">❌ No</div><div class="metric-val text-red">${noCount}</div></div>
@@ -1294,8 +1439,8 @@ function renderEvent(r) {
     <div class="metric"><div class="metric-label">⏳ Pending</div><div class="metric-val text-muted">${pendingCount}</div></div>
   </div>` : '';
 
-  // RSVP member cards
-  const rsvpCards = state.members.map(m => {
+  // RSVP member cards — only visible members
+  const rsvpCards = visibleMembers.map(m => {
     const rsvp = m.rsvp || null;
     const statusColor = rsvp === 'yes' ? 'var(--green)' : rsvp === 'no' ? 'var(--red)' : rsvp === 'maybe' ? 'var(--gold)' : 'var(--muted)';
     const statusLabel = rsvp === 'yes' ? '✅ Attending' : rsvp === 'no' ? '❌ Not coming' : rsvp === 'maybe' ? '🤔 Maybe' : '⏳ Pending';
@@ -1308,7 +1453,6 @@ function renderEvent(r) {
       <button class="btn btn-sm ${rsvp==='no' ? 'btn-danger' : 'btn-ghost'}" onclick="setRsvp('${m.id}','no')">❌ No</button>
     </div>`;
 
-    // ETA & comment inputs — only show when attending or maybe
     const showDetails = rsvp === 'yes' || rsvp === 'maybe';
     const detailsHtml = showDetails ? `
     <div style="display:flex;flex-direction:column;gap:8px">
@@ -1338,7 +1482,7 @@ function renderEvent(r) {
     </div>`;
   }).join('');
 
-  const titleStr = eventTabLabel();
+  const titleStr = activeET ? activeET.name : eventTabLabel();
 
   return `
   <div class="row-sb mb14">
@@ -1347,8 +1491,13 @@ function renderEvent(r) {
   </div>
   ${eventDateHtml}
   ${adminSettingsHtml}
+  ${etSelectorHtml}
   ${summaryHtml}
-  ${state.members.length === 0 ? '<div class="card text-sm text-muted">Add profiles on the Family tab first.</div>' : rsvpCards}`;
+  ${visibleMembers.length === 0
+    ? (state.members.length === 0
+        ? '<div class="card text-sm text-muted">Add profiles on the Family tab first.</div>'
+        : '<div class="card text-sm text-muted">No members assigned to this Event Type. Edit it on the Events tab.</div>')
+    : rsvpCards}`;
 }
 
 // =====================================================================
