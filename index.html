@@ -1439,6 +1439,23 @@ function renderEvent(r) {
     <div class="metric"><div class="metric-label">⏳ Pending</div><div class="metric-val text-muted">${pendingCount}</div></div>
   </div>` : '';
 
+  const costSummaryHtml = r.n > 0 ? `
+  <div class="card mb10">
+    <div class="fw6 mb10">Contributions (${r.n} attending)</div>
+    ${r.attending.map(m => `
+    <div class="stat-row">
+      <span>${m.name}</span>
+      <div class="row gap8">
+        <span class="text-sm text-muted">${r.wingAllotments[m.id]||0} wings</span>
+        <span class="fw5">$${(r.contributions[m.id]||0).toFixed(2)}</span>
+      </div>
+    </div>`).join('')}
+    <div class="stat-row" style="border:none;margin-top:4px">
+      <span class="text-sm text-muted">Total Collected</span>
+      <span class="fw6">$${Object.values(r.contributions).reduce((a,b)=>a+b,0).toFixed(2)}</span>
+    </div>
+  </div>` : '';
+
   // RSVP member cards — only visible members
   const rsvpCards = visibleMembers.map(m => {
     const rsvp = m.rsvp || null;
@@ -1493,6 +1510,7 @@ function renderEvent(r) {
   ${adminSettingsHtml}
   ${etSelectorHtml}
   ${summaryHtml}
+  ${costSummaryHtml}
   ${visibleMembers.length === 0
     ? (state.members.length === 0
         ? '<div class="card text-sm text-muted">Add profiles on the Family tab first.</div>'
