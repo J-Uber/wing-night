@@ -1011,6 +1011,7 @@ function showTab(tab) {
 function render() {
   updateEventTabLabel();
   const app = document.getElementById('app');
+  const scrollY = window.scrollY;
   const r = calc();
   switch (state.activeTab) {
     case 'dashboard':   app.innerHTML = renderDashboard(r); break;
@@ -1024,6 +1025,13 @@ function render() {
     case 'games':     app.innerHTML = renderGames();     break;
     case 'account':   app.innerHTML = renderAccount(); break;
   }
+  // Double rAF ensures the browser has painted the new DOM before we restore scroll,
+  // preventing the "jump to top" caused by innerHTML replacement destroying the focused element.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      window.scrollTo(0, scrollY);
+    });
+  });
 }
 
 // =====================================================================
@@ -1247,13 +1255,16 @@ function renderEventTypes() {
   if (ee !== null && isAdmin()) {
     const isNew = ee === 'new';
     const et = isNew
-      ? { id: '', name: '', memberIds: [] }
+      ? { id: '', name: '', memberIds: [], showCosts: false }
       : state.eventTypes.find(x => x.id === ee) || {};
 
-    const memberChecks = state.members.map(m => `
-    <div class="check-row">
-      <input type="checkbox" id="et-m-${m.id}" ${(et.memberIds||[]).includes(m.id) ? 'checked' : ''}/>
-      <label for="et-m-${m.id}">${m.name}</label>
+    const memberToggles = state.members.map(m => `
+    <div class="row-sb" style="padding:10px 12px;background:var(--card2);border:1px solid var(--border);border-radius:var(--radius);">
+      <span style="font-size:14px;color:var(--text)">${m.name}</span>
+      <label class="toggle">
+        <input type="checkbox" id="et-m-${m.id}" ${(et.memberIds||[]).includes(m.id) ? 'checked' : ''}>
+        <span class="toggle-slider"></span>
+      </label>
     </div>`).join('');
 
     formHtml = `
@@ -1262,10 +1273,20 @@ function renderEventTypes() {
       <label>Event Type Name</label>
       <input id="et-name" value="${et.name||''}" placeholder="e.g. Wing Night, Game Night" class="mb12"/>
       <label>Members Included</label>
-      <div style="display:flex;flex-direction:column;gap:2px;margin-bottom:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;">
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;">
         ${state.members.length === 0
           ? '<div class="text-sm text-muted" style="padding:6px 0">No profiles yet — add them on the Family tab.</div>'
-          : memberChecks}
+          : memberToggles}
+      </div>
+      <div class="row-sb mb14" style="padding:10px 12px;background:var(--card2);border:1px solid var(--border);border-radius:var(--radius);">
+        <div>
+          <div style="font-size:14px;color:var(--text)">Show Cost Breakdown</div>
+          <div class="text-sm text-muted">Displays wing &amp; contribution card on the RSVP tab</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="et-showcosts" ${et.showCosts ? 'checked' : ''}>
+          <span class="toggle-slider"></span>
+        </label>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-primary flex1" onclick="saveEventType('${ee}')">Save Event Type</button>
@@ -1327,12 +1348,13 @@ function saveEventType(id) {
   const memberIds = state.members
     .filter(m => document.getElementById('et-m-' + m.id)?.checked)
     .map(m => m.id);
+  const showCosts = document.getElementById('et-showcosts')?.checked || false;
   if (id === 'new') {
-    const et = { id: 'et' + Date.now(), name, memberIds };
+    const et = { id: 'et' + Date.now(), name, memberIds, showCosts };
     state.eventTypes.push(et);
   } else {
     const idx = state.eventTypes.findIndex(x => x.id === id);
-    if (idx >= 0) state.eventTypes[idx] = { ...state.eventTypes[idx], name, memberIds };
+    if (idx >= 0) state.eventTypes[idx] = { ...state.eventTypes[idx], name, memberIds, showCosts };
   }
   state.editingEventType = null;
   render();
@@ -1439,7 +1461,7 @@ function renderEvent(r) {
     <div class="metric"><div class="metric-label">⏳ Pending</div><div class="metric-val text-muted">${pendingCount}</div></div>
   </div>` : '';
 
-  const costSummaryHtml = r.n > 0 ? `
+  const costSummaryHtml = r.n > 0 && activeET && activeET.showCosts ? `
   <div class="card mb10">
     <div class="fw6 mb10">Contributions (${r.n} attending)</div>
     ${r.attending.map(m => `
