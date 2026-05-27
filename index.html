@@ -399,7 +399,7 @@ async function submitLogin() {
     });
     if (error) throw error;
 
-    auth = { role: 'member', name: data.name, memberId: data.id };
+    auth = { role: 'member', name: data.name, memberId: data.id, username: username };
     updateAuthUI();
     closeAuthModal();
     render();
@@ -741,25 +741,49 @@ function saveSettings() {
   }, 600);
 }
 
-async function saveMemberToDB(member) {
+async function saveMemberToDB(member, scope) {
+  // scope: 'profile' | 'rsvp' | undefined (auto: profile for members, full for admin)
   if (!CREDENTIALS_SET) return;
   if (!canEdit(member.id)) { toast('Not authorised.', true); return; }
   setSyncStatus('syncing');
   try {
-    await db.from('members').upsert({
-      id: member.id,
-      name: member.name,
-      no_max: member.noMax,
-      max_wings: member.maxWings,
-      batches: member.batches,
-      notes: member.notes,
-      attending: member.attending,
-      sort_order: state.members.findIndex(m => m.id === member.id),
-      rsvp: member.rsvp || null,
-      eta: member.eta || null,
-      rsvp_comment: member.rsvpComment || null,
-      avatar_url: member.avatarUrl || null
-    });
+    if (isAdmin()) {
+      await db.from('members').upsert({
+        id: member.id,
+        name: member.name,
+        no_max: member.noMax,
+        max_wings: member.maxWings,
+        batches: member.batches,
+        notes: member.notes,
+        attending: member.attending,
+        sort_order: state.members.findIndex(m => m.id === member.id),
+        rsvp: member.rsvp || null,
+        eta: member.eta || null,
+        rsvp_comment: member.rsvpComment || null,
+        avatar_url: member.avatarUrl || null
+      });
+    } else if (scope === 'rsvp') {
+      const { error } = await db.rpc('update_member_rsvp', {
+        p_member_id: member.id,
+        p_rsvp: member.rsvp || null,
+        p_eta: member.eta || null,
+        p_rsvp_comment: member.rsvpComment || null,
+        p_attending: member.attending || false
+      });
+      if (error) throw error;
+    } else {
+      // Full profile update for members via SECURITY DEFINER RPC
+      const { error } = await db.rpc('update_member_profile', {
+        p_member_id: member.id,
+        p_name: member.name,
+        p_no_max: member.noMax,
+        p_max_wings: member.maxWings,
+        p_batches: member.batches,
+        p_notes: member.notes || '',
+        p_avatar_url: member.avatarUrl || null
+      });
+      if (error) throw error;
+    }
     setSyncStatus('synced');
   } catch (err) {
     setSyncStatus('error');
@@ -1174,8 +1198,7 @@ function renderProfiles(r) {
     <div class="card" style="border-color:#ffffff22;margin-bottom:14px">
       <div class="fw6 mb14">${isNew ? 'New Profile' : 'Edit Profile'}</div>
       <label>Name</label>
-      <input id="pf-name" value="${m.name||''}" placeholder="Family member name" class="mb10"
-        ${!isAdmin() ? 'readonly style="opacity:.6"' : ''}/>
+      <input id="pf-name" value="${m.name||''}" placeholder="Family member name" class="mb10"/>
       <div class="row-sb mb10" style="padding:10px 12px;background:var(--card2);border:1px solid var(--border);border-radius:var(--radius);">
         <span style="font-size:14px;color:var(--text)">No Maximum Wings</span>
         <label class="toggle">
@@ -1908,10 +1931,7 @@ async function saveMember(id) {
   } else {
     const idx = state.members.findIndex(m => m.id === id);
     if (idx >= 0) {
-      // Members can only change notes, noMax, maxWings, batches — not name
-      const updates = isAdmin()
-        ? { name, noMax, maxWings, batches, notes }
-        : { noMax, maxWings, batches, notes };
+      const updates = { name, noMax, maxWings, batches, notes };
       state.members[idx] = {...state.members[idx], ...updates};
       member = state.members[idx];
     }
@@ -1953,7 +1973,7 @@ async function setRsvp(id, status) {
   // Clear eta/comment if setting to 'no'
   if (m.rsvp === 'no') { m.eta = ''; m.rsvpComment = ''; }
   render();
-  await saveMemberToDB(m);
+  await saveMemberToDB(m, 'rsvp');
   toast(m.rsvp ? `RSVP set to ${m.rsvp}!` : 'RSVP cleared.');
 }
 
@@ -1961,7 +1981,7 @@ async function setRsvpDetail(id, field, value) {
   const m = state.members.find(x => x.id === id);
   if (!m) return;
   m[field] = value;
-  await saveMemberToDB(m);
+  await saveMemberToDB(m, 'rsvp');
 }
 
 function copyEventUrl(btn) {
@@ -2003,7 +2023,7 @@ async function toggleAttend(id, val) {
   if (!m) return;
   m.attending = val;
   render();
-  await saveMemberToDB(m);
+  await saveMemberToDB(m, 'rsvp');
 }
 
 async function toggleBatch(k, val) {
@@ -2413,6 +2433,16 @@ function renderAccount() {
       </div>
     </div>
     <div class="card mb10">
+      <div class="fw6 mb14">Change Username</div>
+      <label>New Username</label>
+      <div class="row gap8 mb10">
+        <input id="acct-username-new" type="text" autocomplete="username" placeholder="new username" style="flex:1"/>
+      </div>
+      <label>Current Password (to confirm)</label>
+      <input id="acct-username-pw" type="password" placeholder="••••••••" class="mb12"/>
+      <button class="btn btn-primary btn-full" onclick="changeUsername('${me.id}')">Update Username</button>
+    </div>
+    <div class="card mb10">
       <div class="fw6 mb14">Change Password</div>
       <label>Current Password</label>
       <input id="acct-pw-current" type="password" placeholder="••••••••" class="mb10"/>
@@ -2527,7 +2557,7 @@ async function changePassword(memberId) {
   if (!m) return;
   try {
     const { data, error } = await db.rpc('member_login', {
-      p_username: document.getElementById('auth-username') ? document.getElementById('auth-username').value : '',
+      p_username: auth.username || '',
       p_password: current
     });
     if (error) throw new Error('Current password is incorrect.');
@@ -2539,6 +2569,33 @@ async function changePassword(memberId) {
     toast('Password updated!');
   } catch (err) {
     toast(err.message || 'Could not update password.', true);
+  }
+}
+
+async function changeUsername(memberId) {
+  const newUsername = document.getElementById('acct-username-new')?.value.trim().toLowerCase();
+  const password    = document.getElementById('acct-username-pw')?.value;
+  if (!newUsername) return toast('Please enter a new username.', true);
+  if (!password)    return toast('Please enter your current password.', true);
+  try {
+    // Verify current password first
+    const { error: loginErr } = await db.rpc('member_login', {
+      p_username: auth.username || '',
+      p_password: password
+    });
+    if (loginErr) throw new Error('Current password is incorrect.');
+    // Update username (reuse set_member_credentials with same password would reset hash — use dedicated RPC)
+    const { error } = await db.rpc('set_member_username', {
+      p_member_id: memberId,
+      p_username: newUsername
+    });
+    if (error) throw error;
+    auth.username = newUsername;
+    document.getElementById('acct-username-new').value = '';
+    document.getElementById('acct-username-pw').value = '';
+    toast('Username updated!');
+  } catch (err) {
+    toast(err.message || 'Could not update username.', true);
   }
 }
 
