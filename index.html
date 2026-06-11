@@ -464,7 +464,7 @@ async function submitRegister() {
     auth = { role: 'member', name: name, memberId: data.id };
     // Reload members list so the new profile shows up
     const { data: members } = await db.from('members')
-      .select('id, name, no_max, max_wings, batches, notes, attending, username, sort_order, rsvp, eta, rsvp_comment, avatar_url')
+      .select('id, name, no_max, max_wings, batches, notes, attending, username, sort_order, rsvp, eta, rsvp_comment, avatar_url, phone')
       .order('sort_order');
     if (members) {
       state.members = members.map(m => ({
@@ -472,7 +472,7 @@ async function submitRegister() {
         batches: m.batches || ['b1','b2','b3'], notes: m.notes || '',
         attending: m.attending || false, hasLogin: !!m.username,
         rsvp: m.rsvp || null, eta: m.eta || '', rsvpComment: m.rsvp_comment || '',
-        avatarUrl: m.avatar_url || null
+        avatarUrl: m.avatar_url || null, phone: m.phone || ''
       }));
     }
     updateAuthUI();
@@ -623,7 +623,7 @@ async function loadAll() {
 
     // Load members (never expose password_hash to client)
     const { data: members } = await db.from('members')
-      .select('id, name, no_max, max_wings, batches, notes, attending, username, sort_order, rsvp, eta, rsvp_comment, avatar_url')
+      .select('id, name, no_max, max_wings, batches, notes, attending, username, sort_order, rsvp, eta, rsvp_comment, avatar_url, phone')
       .order('sort_order');
     if (members) {
       state.members = members.map(m => ({
@@ -638,7 +638,8 @@ async function loadAll() {
         rsvp: m.rsvp || null,
         eta: m.eta || '',
         rsvpComment: m.rsvp_comment || '',
-        avatarUrl: m.avatar_url || null
+        avatarUrl: m.avatar_url || null,
+        phone: m.phone || ''
       }));
     }
 
@@ -762,7 +763,8 @@ async function saveMemberToDB(member, scope) {
         rsvp: member.rsvp || null,
         eta: member.eta || null,
         rsvp_comment: member.rsvpComment || null,
-        avatar_url: member.avatarUrl || null
+        avatar_url: member.avatarUrl || null,
+        phone: member.phone || null
       });
     } else if (scope === 'rsvp') {
       const { error } = await db.rpc('update_member_rsvp', {
@@ -1225,6 +1227,8 @@ function renderProfiles(r) {
       </div>
       <label>Notes / Special Requests</label>
       <textarea id="pf-notes" placeholder="e.g. extra crispy, no sauce..." class="mb10">${m.notes||''}</textarea>
+      <label>Phone Number</label>
+      <input id="pf-phone" type="tel" inputmode="tel" value="${m.phone||''}" placeholder="(615) 555-0123" class="mb10"/>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-primary flex1" onclick="saveMember('${em}')">Save Profile</button>
         <button class="btn btn-ghost" onclick="cancelEdit()">Cancel</button>
@@ -1254,10 +1258,14 @@ function renderProfiles(r) {
             <div class="fw5" style="font-size:15px">${m.name}${m.hasLogin ? ' <span class="tag tag-green" style="font-size:10px;padding:1px 6px">has login</span>' : ''}</div>
             <div class="text-sm text-muted">${m.noMax ? 'No max' : 'Max ' + m.maxWings + ' wings'} &middot;
               ${(m.batches||[]).filter(b => state.batches[b]).map(b => state.batches[b].name).join(', ') || 'No batches'}</div>
+            ${m.phone ? `<div class="text-sm text-muted" style="margin-top:2px">📱 ${m.phone}</div>` : ''}
             ${m.notes ? `<div class="text-sm text-muted" style="margin-top:3px;font-style:italic">${m.notes}</div>` : ''}
           </div>
         </div>
-        ${canEditThis ? `<button class="btn btn-ghost btn-sm" onclick="editMember('${m.id}')">Edit</button>` : ''}
+        ${canEditThis ? `<div class="row" style="gap:6px">
+          <button class="btn btn-ghost btn-sm" onclick="editMember('${m.id}')">Edit</button>
+          ${isAdmin() ? `<button class="btn btn-ghost btn-sm" onclick="generateMagicLink('${m.id}', this)" title="Copy login link">🔗</button>` : ''}
+        </div>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -1927,14 +1935,15 @@ async function saveMember(id) {
   const maxWings = parseInt(document.getElementById('pf-maxwings')?.value) || 20;
   const batches = ['b1','b2','b3'].filter(k => document.getElementById('pf-batch-' + k)?.checked);
   const notes = document.getElementById('pf-notes').value.trim();
+  const phone = document.getElementById('pf-phone')?.value.trim() || '';
   let member;
   if (id === 'new') {
-    member = { id: 'm' + Date.now(), name, noMax, maxWings, batches, notes, attending: false, rsvp: null, eta: '', rsvpComment: '', avatarUrl: null };
+    member = { id: 'm' + Date.now(), name, noMax, maxWings, batches, notes, phone, attending: false, rsvp: null, eta: '', rsvpComment: '', avatarUrl: null };
     state.members.push(member);
   } else {
     const idx = state.members.findIndex(m => m.id === id);
     if (idx >= 0) {
-      const updates = { name, noMax, maxWings, batches, notes };
+      const updates = { name, noMax, maxWings, batches, notes, phone };
       state.members[idx] = {...state.members[idx], ...updates};
       member = state.members[idx];
     }
@@ -2663,6 +2672,57 @@ async function removeLogin(memberId) {
 }
 
 // =====================================================================
+// MAGIC LINKS
+// =====================================================================
+async function generateMagicLink(memberId, btn) {
+  if (!isAdmin()) return toast('Admin only.', true);
+  const orig = btn.textContent;
+  btn.textContent = '⏳';
+  btn.disabled = true;
+  try {
+    const { data, error } = await db.rpc('create_magic_token', { p_member_id: memberId });
+    if (error) throw error;
+    const url = new URL(window.location.href);
+    url.search = '';
+    url.hash = '';
+    url.searchParams.set('token', data);
+    await navigator.clipboard.writeText(url.toString());
+    btn.textContent = '✅';
+    toast('Magic link copied! Send it to them — expires in 24h.');
+  } catch (err) {
+    toast('Failed to generate link: ' + (err.message || 'unknown error'), true);
+    btn.textContent = orig;
+  } finally {
+    btn.disabled = false;
+    setTimeout(() => { if (btn.textContent === '✅') btn.textContent = orig; }, 3000);
+  }
+}
+
+async function tryMagicTokenLogin() {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('token');
+  if (!token) return false;
+
+  // Clean token from URL immediately so it's not accidentally reshared
+  const cleanUrl = window.location.pathname + window.location.hash;
+  window.history.replaceState({}, '', cleanUrl);
+
+  try {
+    const { data, error } = await db.rpc('redeem_magic_token', { p_token: token });
+    if (error) throw error;
+    if (!data || !data.id) throw new Error('Invalid or expired link.');
+    auth = { role: 'member', name: data.name, memberId: data.id, username: data.username || '' };
+    updateAuthUI();
+    state.activeTab = 'event';
+    toast(`Welcome, ${data.name}! You can update your RSVP below.`);
+    return true;
+  } catch (err) {
+    toast('This link is invalid or has expired. Please ask for a new one.', true);
+    return false;
+  }
+}
+
+// =====================================================================
 // INIT
 // =====================================================================
 async function init() {
@@ -2676,8 +2736,13 @@ async function init() {
   document.getElementById('loadingScreen').style.display = 'none';
   document.getElementById('nav').style.display = 'flex';
   updateAuthUI();
-  if (window.location.hash === '#event') {
-    state.activeTab = 'event';
+
+  // Check for magic token login BEFORE normal hash routing
+  const usedToken = await tryMagicTokenLogin();
+  if (!usedToken) {
+    if (window.location.hash === '#event') {
+      state.activeTab = 'event';
+    }
   }
   render();
 }
