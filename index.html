@@ -611,6 +611,7 @@ async function loadAll() {
         if (row.key === 'batches') state.batches = row.value;
         if (row.key === 'event') state.event = row.value;
         if (row.key === 'eventTypes') state.eventTypes = row.value || [];
+        if (row.key === 'activeEventType') state.activeEventType = row.value || null;
       });
     } else {
       await db.from('settings').upsert([
@@ -731,7 +732,8 @@ function saveSettings() {
         { key: 'costs', value: state.costs },
         { key: 'batches', value: state.batches },
         { key: 'event', value: state.event },
-        { key: 'eventTypes', value: state.eventTypes }
+        { key: 'eventTypes', value: state.eventTypes },
+        { key: 'activeEventType', value: state.activeEventType }
       ]);
       setSyncStatus('synced');
     } catch (err) {
@@ -1361,6 +1363,7 @@ function cancelEventTypeEdit() { state.editingEventType = null; render(); }
 
 function setActiveEventType(id) {
   state.activeEventType = state.activeEventType === id ? null : id;
+  saveSettings();
   render();
 }
 
@@ -1419,10 +1422,10 @@ function renderEvent(r) {
     <div class="text-sm text-muted mb8">Event Type</div>
     <div class="filter-bar">
       <button class="filter-chip ${!state.activeEventType ? 'active' : ''}"
-        onclick="state.activeEventType=null;render()">All Members</button>
+        onclick="state.activeEventType=null;saveSettings();render()">All Members</button>
       ${state.eventTypes.map(et =>
         `<button class="filter-chip ${state.activeEventType===et.id ? 'active' : ''}"
-          onclick="state.activeEventType='${et.id}';render()">${et.name}</button>`
+          onclick="state.activeEventType='${et.id}';saveSettings();render()">${et.name}</button>`
       ).join('')}
     </div>
   </div>` : '';
