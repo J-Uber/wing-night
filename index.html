@@ -103,6 +103,7 @@ select option{background:var(--card)}
 .tag-green{background:#4caf8218;color:#4caf82;border:1px solid #4caf8233}
 .tag-muted{background:var(--card2);color:var(--muted);border:1px solid var(--border)}
 .tag-red{background:#e0555518;color:#e08080;border:1px solid #e0555533}
+.tag-gold{background:#d4a01720;color:#d4a017;border:1px solid #d4a01740}
 
 /* TOGGLE */
 .toggle{position:relative;display:inline-block;width:44px;height:26px;flex-shrink:0}
@@ -537,7 +538,7 @@ const HISTORICAL = [
 const DEFAULT_SETTINGS = {
   costs: {numPacks:2, packPrices:[26.23,25.05], totalWings:156, oilCost:15, sauceCost:15, milkCost:2.98},
   batches: {b1:{enabled:true,name:'Batch 1'}, b2:{enabled:true,name:'Batch 2'}, b3:{enabled:false,name:'Batch 3'}},
-  event: {date:'', startTime:'', rsvpDeadline:''}
+  event: {date:'', startTime:'', rsvpDeadline:'', costsFinalized:false}
 };
 
 // =====================================================================
@@ -1475,6 +1476,16 @@ function renderEvent(r) {
           <input type="time" id="ev-start" value="${ev.startTime||''}" onchange="updateEventSetting('startTime', this.value)"/>
         </div>
       </div>
+      <div class="row-sb mb10" style="padding:10px 12px;background:var(--card2);border:1px solid var(--border);border-radius:var(--radius);">
+        <div>
+          <div style="font-size:14px;color:var(--text)">Finalize Wing Counts &amp; Costs</div>
+          <div class="text-sm text-muted">While off, only you can see wing counts and amounts owed.</div>
+        </div>
+        <label class="toggle" style="flex-shrink:0">
+          <input type="checkbox" ${ev.costsFinalized ? 'checked' : ''} onchange="updateEventSetting('costsFinalized', this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
       <div class="row gap8" style="flex-wrap:wrap">
         <button class="btn btn-ghost btn-sm" onclick="resetRsvps()">🔄 Reset All RSVPs</button>
       </div>
@@ -1495,9 +1506,10 @@ function renderEvent(r) {
     <div class="metric"><div class="metric-label">⏳ Pending</div><div class="metric-val text-muted">${pendingCount}</div></div>
   </div>` : '';
 
-  const costSummaryHtml = r.n > 0 && activeET && activeET.showCosts ? `
+  const costsVisible = isAdmin() || !!ev.costsFinalized;
+  const costSummaryHtml = r.n > 0 && activeET && activeET.showCosts && costsVisible ? `
   <div class="card mb10">
-    <div class="fw6 mb10">Contributions (${r.n} attending)</div>
+    <div class="fw6 mb10">Contributions (${r.n} attending)${!ev.costsFinalized ? ' <span class="tag tag-gold" style="font-size:10px;vertical-align:middle">Not finalized — admin view only</span>' : ''}</div>
     ${r.attending.map(m => `
     <div class="stat-row">
       <span>${m.name}</span>
@@ -1510,7 +1522,10 @@ function renderEvent(r) {
       <span class="text-sm text-muted">Total Collected</span>
       <span class="fw6">$${Object.values(r.contributions).reduce((a,b)=>a+b,0).toFixed(2)}</span>
     </div>
-  </div>` : '';
+  </div>` : (r.n > 0 && activeET && activeET.showCosts && !isAdmin() ? `
+  <div class="card mb10 text-sm text-muted" style="text-align:center;padding:18px 14px">
+    🔒 Wing counts and amounts owed will be shown here once the numbers are finalized.
+  </div>` : '');
 
   // RSVP member cards — only visible members
   const rsvpCards = visibleMembers.map(m => {
