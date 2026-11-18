@@ -23,6 +23,7 @@ html,body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);
 .db-banner strong{display:block;font-weight:600;margin-bottom:2px;}
 .db-banner code{font-family:monospace;background:#3a2020;padding:1px 5px;border-radius:3px;font-size:12px;}
 .db-banner.show{display:block;}
+.test-banner{background:#2a2410;border-bottom-color:#5a4a1a;color:var(--gold);}
 
 /* NAV */
 nav{display:flex;gap:2px;padding:8px 10px;background:var(--surface);border-bottom:1px solid var(--border);overflow-x:auto;align-items:center;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
@@ -207,6 +208,12 @@ select option{background:var(--card)}
   Find these in your Supabase dashboard under <strong>Project Settings → API</strong>.
 </div>
 
+<!-- Testing-mode banner (shown when TEST_OPEN_ACCESS is true) -->
+<div class="db-banner test-banner" id="testBanner">
+  <strong>🧪 Testing mode: full access is open to everyone</strong>
+  Set <code>TEST_OPEN_ACCESS = false</code> in the script to restore normal roles.
+</div>
+
 <!-- Loading screen -->
 <div class="loading-screen" id="loadingScreen">
   <div class="loading-spinner"></div>
@@ -288,6 +295,10 @@ const SUPABASE_URL = 'https://jduczqwrdhcuhzdszhyk.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpkdWN6cXdyZGhjdWh6ZHN6aHlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyNDU3NDAsImV4cCI6MjA5MjgyMTc0MH0.f1g-8f5DEluvCPeMlcmQR3fpD22bQYq-x7o52aIK7pA';
 // =====================================================================
 
+// TESTING MODE — when true, every visitor (signed in or not) gets full admin
+// access in the app. Set back to false when testing is done.
+const TEST_OPEN_ACCESS = true;
+
 const CREDENTIALS_SET = SUPABASE_URL !== 'YOUR_SUPABASE_URL_HERE' && SUPABASE_KEY !== 'YOUR_SUPABASE_ANON_KEY_HERE';
 
 const { createClient } = supabase;
@@ -302,8 +313,9 @@ const db = createClient(
 // role: 'anon' | 'member' | 'admin'
 let auth = { role: 'anon', name: 'Guest', memberId: null };
 
-function isAdmin()  { return auth.role === 'admin'; }
-function isMember() { return auth.role === 'member' || auth.role === 'admin'; }
+function isRealAdmin() { return auth.role === 'admin'; }   // actually signed in via Supabase Auth
+function isAdmin()  { return TEST_OPEN_ACCESS || auth.role === 'admin'; }
+function isMember() { return TEST_OPEN_ACCESS || auth.role === 'member' || auth.role === 'admin'; }
 function isAnon()   { return auth.role === 'anon'; }
 function canEdit(memberId) {
   if (isAdmin()) return true;
@@ -318,8 +330,8 @@ function updateAuthUI() {
   const accBtn  = document.getElementById('accountTabBtn');
   if (!nameEl) return;
   nameEl.textContent = auth.name;
-  roleEl.textContent = auth.role === 'admin' ? 'Admin' : auth.role === 'member' ? 'Member' : 'Viewing';
-  roleEl.className   = 'auth-role ' + (auth.role === 'admin' ? 'admin' : auth.role === 'member' ? 'member' : 'anon');
+  roleEl.textContent = auth.role === 'admin' ? 'Admin' : TEST_OPEN_ACCESS ? 'Test Access' : auth.role === 'member' ? 'Member' : 'Viewing';
+  roleEl.className   = 'auth-role ' + (auth.role === 'admin' || TEST_OPEN_ACCESS ? 'admin' : auth.role === 'member' ? 'member' : 'anon');
   btnEl.textContent  = isAnon() ? 'Sign In' : 'Sign Out';
   if (accBtn) accBtn.style.display = isAnon() ? 'none' : '';
 }
@@ -640,8 +652,23 @@ async function loadAll() {
         eta: m.eta || '',
         rsvpComment: m.rsvp_comment || '',
         avatarUrl: m.avatar_url || null,
-        phone: m.phone || ''
+        phone: m.phone || '',
+        cookWings: null
       }));
+    }
+
+    // Load cook-day wing counts separately so the app still loads if the
+    // cook_wings column hasn't been added to the database yet.
+    const { data: cookRows, error: cookErr } = await db.from('members').select('id, cook_wings');
+    if (!cookErr && cookRows) {
+      state.cookWingsReady = true;
+      cookRows.forEach(row => {
+        const m = state.members.find(x => x.id === row.id);
+        if (m) m.cookWings = row.cook_wings;
+      });
+    } else {
+      state.cookWingsReady = false;
+      console.warn('cook_wings column not found — run the cook_wings SQL migration to save cook-day counts.');
     }
 
     // Load sauces
@@ -730,29 +757,42 @@ function saveSettings() {
   saveSettingsTimer = setTimeout(async () => {
     setSyncStatus('syncing');
     try {
-      await db.from('settings').upsert([
+      const { error } = await db.from('settings').upsert([
         { key: 'costs', value: state.costs },
         { key: 'batches', value: state.batches },
         { key: 'event', value: state.event },
         { key: 'eventTypes', value: state.eventTypes },
         { key: 'activeEventType', value: state.activeEventType }
       ]);
+      if (error) throw error;
       setSyncStatus('synced');
     } catch (err) {
       setSyncStatus('error');
-      toast('Failed to save settings', true);
+      toast('Failed to save settings' + (err?.message ? ': ' + err.message : ''), true);
     }
   }, 600);
 }
 
 async function saveMemberToDB(member, scope) {
-  // scope: 'profile' | 'rsvp' | undefined (auto: profile for members, full for admin)
+  // scope: 'profile' | 'rsvp' | 'cook' | 'insert' | undefined
+  //   'cook'   → cook-day wing count via RPC (works for every role)
+  //   real admin or 'insert' → direct upsert of the whole row
+  //   'rsvp'   → RSVP RPC;  otherwise → profile RPC
   if (!CREDENTIALS_SET) return;
   if (!canEdit(member.id)) { toast('Not authorised.', true); return; }
   setSyncStatus('syncing');
   try {
-    if (isAdmin()) {
-      await db.from('members').upsert({
+    if (scope === 'cook') {
+      const { error } = await db.rpc('update_member_cook_wings', {
+        p_member_id: member.id,
+        p_cook_wings: member.cookWings === null || member.cookWings === undefined ? null : member.cookWings
+      });
+      if (error) {
+        if (!state.cookWingsReady) throw new Error('Cook-day counts can\'t be saved until the cook_wings SQL is run in Supabase.');
+        throw error;
+      }
+    } else if (isRealAdmin() || scope === 'insert') {
+      const row = {
         id: member.id,
         name: member.name,
         no_max: member.noMax,
@@ -766,7 +806,10 @@ async function saveMemberToDB(member, scope) {
         rsvp_comment: member.rsvpComment || null,
         avatar_url: member.avatarUrl || null,
         phone: member.phone || null
-      });
+      };
+      if (state.cookWingsReady) row.cook_wings = member.cookWings ?? null;
+      const { error } = await db.from('members').upsert(row);
+      if (error) throw error;
     } else if (scope === 'rsvp') {
       const { error } = await db.rpc('update_member_rsvp', {
         p_member_id: member.id,
@@ -792,7 +835,7 @@ async function saveMemberToDB(member, scope) {
     setSyncStatus('synced');
   } catch (err) {
     setSyncStatus('error');
-    toast('Failed to save member', true);
+    toast(err?.message ? 'Save failed: ' + err.message : 'Failed to save member', true);
   }
 }
 
@@ -800,11 +843,12 @@ async function deleteMemberFromDB(id) {
   if (!CREDENTIALS_SET || !isAdmin()) return;
   setSyncStatus('syncing');
   try {
-    await db.from('members').delete().eq('id', id);
+    const { error } = await db.from('members').delete().eq('id', id);
+    if (error) throw error;
     setSyncStatus('synced');
   } catch (err) {
     setSyncStatus('error');
-    toast('Failed to delete member', true);
+    toast('Failed to delete member' + (err?.message ? ': ' + err.message : ''), true);
   }
 }
 
@@ -812,7 +856,7 @@ async function saveSauceToDB(sauce) {
   if (!CREDENTIALS_SET || !isAdmin()) return;
   setSyncStatus('syncing');
   try {
-    await db.from('sauces').upsert({
+    const { error } = await db.from('sauces').upsert({
       id: sauce.id,
       name: sauce.name,
       brand: sauce.brand,
@@ -824,10 +868,11 @@ async function saveSauceToDB(sauce) {
       favorite: sauce.favorite,
       out_of_stock: sauce.outOfStock
     });
+    if (error) throw error;
     setSyncStatus('synced');
   } catch (err) {
     setSyncStatus('error');
-    toast('Failed to save sauce', true);
+    toast('Failed to save sauce' + (err?.message ? ': ' + err.message : ''), true);
   }
 }
 
@@ -835,11 +880,12 @@ async function deleteSauceFromDB(id) {
   if (!CREDENTIALS_SET || !isAdmin()) return;
   setSyncStatus('syncing');
   try {
-    await db.from('sauces').delete().eq('id', id);
+    const { error } = await db.from('sauces').delete().eq('id', id);
+    if (error) throw error;
     setSyncStatus('synced');
   } catch (err) {
     setSyncStatus('error');
-    toast('Failed to delete sauce', true);
+    toast('Failed to delete sauce' + (err?.message ? ': ' + err.message : ''), true);
   }
 }
 
@@ -847,7 +893,7 @@ async function saveGameToDB(game) {
   if (!CREDENTIALS_SET || !isAdmin()) return;
   setSyncStatus('syncing');
   try {
-    await db.from('games').upsert({
+    const { error } = await db.from('games').upsert({
       id: game.id,
       name: game.name,
       designer: game.designer,
@@ -862,10 +908,11 @@ async function saveGameToDB(game) {
       wishlist: game.wishlist,
       notes: game.notes
     });
+    if (error) throw error;
     setSyncStatus('synced');
   } catch (err) {
     setSyncStatus('error');
-    toast('Failed to save game', true);
+    toast('Failed to save game' + (err?.message ? ': ' + err.message : ''), true);
   }
 }
 
@@ -873,11 +920,12 @@ async function deleteGameFromDB(id) {
   if (!CREDENTIALS_SET || !isAdmin()) return;
   setSyncStatus('syncing');
   try {
-    await db.from('games').delete().eq('id', id);
+    const { error } = await db.from('games').delete().eq('id', id);
+    if (error) throw error;
     setSyncStatus('synced');
   } catch (err) {
     setSyncStatus('error');
-    toast('Failed to delete game', true);
+    toast('Failed to delete game' + (err?.message ? ': ' + err.message : ''), true);
   }
 }
 
@@ -886,7 +934,7 @@ async function saveHistoryEntry(entry) {
   if (!isAdmin()) { toast('Only admin can log events.', true); return null; }
   setSyncStatus('syncing');
   try {
-    const { data } = await db.from('history').insert({
+    const { data, error } = await db.from('history').insert({
       date: entry.date,
       people: entry.people,
       wings: entry.wings,
@@ -900,11 +948,12 @@ async function saveHistoryEntry(entry) {
       wings_per_person: entry.wingsPerPerson,
       extra_wings: entry.extraWings
     }).select().single();
+    if (error) throw error;
     setSyncStatus('synced');
     return data;
   } catch (err) {
     setSyncStatus('error');
-    toast('Failed to save history', true);
+    toast('Failed to save history' + (err?.message ? ': ' + err.message : ''), true);
     return null;
   }
 }
@@ -913,11 +962,12 @@ async function deleteHistoryFromDB(id) {
   if (!CREDENTIALS_SET || !isAdmin()) return;
   setSyncStatus('syncing');
   try {
-    await db.from('history').delete().eq('id', id);
+    const { error } = await db.from('history').delete().eq('id', id);
+    if (error) throw error;
     setSyncStatus('synced');
   } catch (err) {
     setSyncStatus('error');
-    toast('Failed to delete entry', true);
+    toast('Failed to delete entry' + (err?.message ? ': ' + err.message : ''), true);
   }
 }
 
@@ -967,6 +1017,19 @@ function calc() {
   const totalCostPerWing = totalDistributed > 0 ? totalCost / totalDistributed : 0;
   for (let m of attending) contributions[m.id] = (wingAllotments[m.id] || 0) * totalCostPerWing;
 
+  // Split each person's allotment into cooked-on-event-day vs. Take Home.
+  // cookWings null/blank = cook everything. Contributions still cover the full allotment.
+  let cookAllot = {}, takeHome = {};
+  for (let m of attending) {
+    const allot = wingAllotments[m.id] || 0;
+    const hasPref = m.cookWings !== null && m.cookWings !== undefined && m.cookWings !== '';
+    const cook = hasPref ? Math.max(0, Math.min(allot, parseInt(m.cookWings) || 0)) : allot;
+    cookAllot[m.id] = cook;
+    takeHome[m.id] = allot - cook;
+  }
+  const totalTakeHome = Object.values(takeHome).reduce((a, b) => a + b, 0);
+  const totalCookAllot = Object.values(cookAllot).reduce((a, b) => a + b, 0);
+
   const enabledBatches = Object.entries(state.batches).filter(([k, b]) => b.enabled).map(([k]) => k);
 
   let personBatch = {};
@@ -975,7 +1038,7 @@ function calc() {
   for (let m of attending) personBatch[m.id] = Object.fromEntries(enabledBatches.map(b => [b, 0]));
 
   for (let m of attending) {
-    const wings = wingAllotments[m.id] || 0;
+    const wings = cookAllot[m.id] || 0;   // only cook-day wings go into batches
     if (!wings) continue;
     const mb = (m.batches || []).filter(b => enabledBatches.includes(b));
     if (!mb.length) continue;
@@ -1008,7 +1071,7 @@ function calc() {
     }
   }
 
-  return { totalWingCost, totalWings, baseCostPerWing, avgPackCost, extraCosts, totalCost, attending, n, wingAllotments, contributions, extraWings, totalDistributed, totalCostPerWing, batchWings, personBatch, enabledBatches };
+  return { totalWingCost, totalWings, baseCostPerWing, avgPackCost, extraCosts, totalCost, attending, n, wingAllotments, contributions, extraWings, totalDistributed, totalCostPerWing, batchWings, personBatch, enabledBatches, cookAllot, takeHome, totalTakeHome, totalCookAllot };
 }
 
 // =====================================================================
@@ -1172,6 +1235,8 @@ function renderDashboard(r) {
       <div class="metric"><div class="metric-label">Extra</div><div class="metric-val">${r.extraWings}</div></div>
       <div class="metric"><div class="metric-label">$/Wing All-In</div><div class="metric-val">$${r.totalCostPerWing.toFixed(3)}</div></div>
       <div class="metric"><div class="metric-label">Avg Contrib</div><div class="metric-val">$${(r.totalCost/r.n).toFixed(2)}</div></div>
+      <div class="metric"><div class="metric-label">Cooked at Event</div><div class="metric-val">${r.totalCookAllot}</div></div>
+      <div class="metric"><div class="metric-label">🥡 Take Home</div><div class="metric-val text-green">${r.totalTakeHome}</div></div>
     </div>
   </div>` : `
   <div class="card row-sb">
@@ -1273,7 +1338,7 @@ function renderProfiles(r) {
 
   return `
   <div class="section-title">Family Profiles</div>
-  ${isAnon() ? readonlyNotice('Sign in to mark yourself as attending or edit your profile.') : ''}
+  ${isAnon() && !TEST_OPEN_ACCESS ? readonlyNotice('Sign in to mark yourself as attending or edit your profile.') : ''}
   ${formHtml}
   ${isAdmin() && em === null ? `<button class="btn btn-primary btn-full mb14" onclick="newMember()">+ Add Family Member</button>` : ''}
   ${state.members.length === 0 && em === null ? '<div class="text-sm text-muted">No profiles yet.</div>' : cards}`;
@@ -1514,7 +1579,7 @@ function renderEvent(r) {
     <div class="stat-row">
       <span>${m.name}</span>
       <div class="row gap8">
-        <span class="text-sm text-muted">${r.wingAllotments[m.id]||0} wings</span>
+        <span class="text-sm text-muted">${r.wingAllotments[m.id]||0} wings${(r.takeHome[m.id]||0) > 0 ? ` <span class="text-green">(🥡 ${r.takeHome[m.id]})</span>` : ''}</span>
         <span class="fw5">$${(r.contributions[m.id]||0).toFixed(2)}</span>
       </div>
     </div>`).join('')}
@@ -1542,8 +1607,33 @@ function renderEvent(r) {
     </div>`;
 
     const showDetails = rsvp === 'yes' || rsvp === 'maybe';
+    const editable = canEdit(m.id);
+    const hasCookPref = m.cookWings !== null && m.cookWings !== undefined && m.cookWings !== '';
+    const allot = r.wingAllotments[m.id];
+    let cookSummary;
+    if (rsvp === 'yes' && allot !== undefined && costsVisible) {
+      const ck = r.cookAllot[m.id] || 0, th = r.takeHome[m.id] || 0;
+      cookSummary = `Allotted ${allot} · Cook ${ck} · 🥡 Take home <span class="text-green">${th}</span>`
+        + (hasCookPref && parseInt(m.cookWings) > allot ? ' <span class="text-gold">(capped at your allotment)</span>' : '');
+    } else {
+      cookSummary = hasCookPref
+        ? `Cooking ${m.cookWings} tonight. Anything left from your allotment goes home with you.`
+        : 'Leave blank to cook all of your wings. Set a number to take the rest home.';
+    }
+    const cookHtml = `
+      <div>
+        <label>Wings to Cook at the Event</label>
+        <div class="row gap8">
+          <input type="number" inputmode="numeric" min="0" step="1" placeholder="All" style="flex:1"
+            value="${hasCookPref ? m.cookWings : ''}"
+            ${editable ? `onchange="setCookWings('${m.id}', this.value)"` : 'disabled'}/>
+          ${editable && hasCookPref ? `<button class="btn btn-ghost btn-sm" onclick="setCookWings('${m.id}', '')">Cook All</button>` : ''}
+        </div>
+        <div class="text-sm text-muted" style="margin-top:5px">${cookSummary}</div>
+      </div>`;
     const detailsHtml = showDetails ? `
     <div style="display:flex;flex-direction:column;gap:8px">
+      ${cookHtml}
       <div>
         <label>Estimated Arrival</label>
         <input type="time" value="${m.eta||''}" onchange="setRsvpDetail('${m.id}','eta',this.value)"/>
@@ -1631,23 +1721,43 @@ function renderCook(r) {
   <div class="grid2-auto mb14">
     <div class="metric"><div class="metric-label">Active Batches</div><div class="metric-val">${r.enabledBatches.length}</div></div>
     <div class="metric"><div class="metric-label">Total to Cook</div><div class="metric-val">${Math.round(totalBW)}</div></div>
+    <div class="metric"><div class="metric-label">🥡 Take Home</div><div class="metric-val text-green">${r.totalTakeHome}</div></div>
   </div>
   ${batchCards}
+  ${r.n > 0 ? (() => {
+    const th = r.attending.filter(m => (r.takeHome[m.id] || 0) > 0);
+    const thPct = (totalBW + r.totalTakeHome) > 0 ? (r.totalTakeHome / (totalBW + r.totalTakeHome) * 100) : 0;
+    return `
+  <div class="card" style="border-color:#4caf8233">
+    <div class="row-sb mb8">
+      <div class="row gap8">
+        <span class="fw5">🥡 Take Home</span>
+        <span class="tag tag-green">Not cooked tonight</span>
+      </div>
+      <span class="fw5" style="font-size:18px">${r.totalTakeHome} wings</span>
+    </div>
+    <div class="batch-bar mb8"><div class="batch-bar-fill" style="width:${thPct.toFixed(1)}%;background:var(--green)"></div></div>
+    <div class="text-sm text-muted">${th.length
+      ? th.map(m => `${m.name} (${r.takeHome[m.id]})`).join(', ')
+      : 'No take-home wings. Everyone is cooking all of theirs.'}</div>
+  </div>`;
+  })() : ''}
   ${r.n > 0 ? `
   <div class="card">
     <div class="fw6 mb10">Per-Person Breakdown</div>
     ${r.attending.map(m => {
       const mb = (m.batches||[]).filter(bk => r.enabledBatches.includes(bk));
       const tw = r.wingAllotments[m.id] || 0;
+      const thw = r.takeHome[m.id] || 0;
       return `
       <div style="padding:8px 0;border-bottom:1px solid #2e2e2e55">
         <div class="row-sb mb8"><span class="fw5">${m.name}</span><span class="text-sm text-muted">${tw} total</span></div>
-        <div class="row gap8">${mb.length
+        <div class="row gap8" style="flex-wrap:wrap">${mb.length
           ? mb.map(bk => {
               const w = Math.round(r.personBatch[m.id]?.[bk] || 0);
               return w > 0 ? `<span class="tag tag-primary">${state.batches[bk].name}: ${w}</span>` : '';
             }).filter(Boolean).join('')
-          : '<span class="tag tag-red">No batches assigned</span>'}</div>
+          : '<span class="tag tag-red">No batches assigned</span>'}${thw > 0 ? `<span class="tag tag-green">🥡 Take Home: ${thw}</span>` : ''}</div>
       </div>`;
     }).join('')}
     ${r.extraWings > 0 && lastActiveBatch ? `
@@ -1965,7 +2075,7 @@ async function saveMember(id) {
   }
   state.editingMember = null;
   render();
-  await saveMemberToDB(member);
+  await saveMemberToDB(member, id === 'new' ? 'insert' : undefined);
   toast('Profile saved.');
 }
 
@@ -2004,6 +2114,16 @@ async function setRsvp(id, status) {
   toast(m.rsvp ? `RSVP set to ${m.rsvp}!` : 'RSVP cleared.');
 }
 
+async function setCookWings(id, value) {
+  if (!canEdit(id)) return toast('You can only change your own wings.', true);
+  const m = state.members.find(x => x.id === id);
+  if (!m) return;
+  const v = String(value ?? '').trim();
+  m.cookWings = v === '' ? null : Math.max(0, parseInt(v) || 0);
+  render();
+  await saveMemberToDB(m, 'cook');
+}
+
 async function setRsvpDetail(id, field, value) {
   const m = state.members.find(x => x.id === id);
   if (!m) return;
@@ -2037,10 +2157,14 @@ async function resetRsvps() {
     m.eta = '';
     m.rsvpComment = '';
     m.attending = false;
+    m.cookWings = null;
   }
   render();
-  // Save all members
-  for (const m of state.members) await saveMemberToDB(m);
+  // Save all members (RSVP fields + cook-day count)
+  for (const m of state.members) {
+    await saveMemberToDB(m, 'rsvp');
+    if (state.cookWingsReady) await saveMemberToDB(m, 'cook');
+  }
   toast('All RSVPs reset.');
 }
 
@@ -2750,6 +2874,7 @@ async function init() {
   await loadAll();
   document.getElementById('loadingScreen').style.display = 'none';
   document.getElementById('nav').style.display = 'flex';
+  if (TEST_OPEN_ACCESS) document.getElementById('testBanner').classList.add('show');
   updateAuthUI();
 
   // Check for magic token login BEFORE normal hash routing
